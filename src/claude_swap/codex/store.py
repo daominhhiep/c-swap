@@ -154,6 +154,15 @@ class CodexStore:
     def write_live(self, auth: dict) -> None:
         _write_json_0600(self.live_path(), auth)
 
+    def delete_live(self) -> bool:
+        """Remove the Codex CLI's login file (the file only — nothing is
+        revoked). ``True`` when a file was removed."""
+        try:
+            self.live_path().unlink()
+        except FileNotFoundError:
+            return False
+        return True
+
     # -- roster queries -------------------------------------------------------
 
     def next_number(self) -> int:

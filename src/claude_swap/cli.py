@@ -1016,6 +1016,36 @@ def _select_provider(args) -> str:
     raise ValidationError(f"Invalid choice: {choice!r} (expected 1 or 2)")
 
 
+def _codex_login_command(argv: list[str]) -> None:
+    """Handle `ccswap codex login [-- <codex login args>]`.
+
+    Saves the current Codex login as an account, moves it out of the way so
+    `codex login` has nothing to revoke, runs the login, and saves the new
+    account. Everything after `login` is passed through to `codex login`
+    (e.g. `--device-auth`).
+    """
+    if argv[:1] in (["-h"], ["--help"]):
+        print(
+            f"usage: {_prog_name()} codex login [<codex login options>]\n\n"
+            "Sign in to another ChatGPT account for the Codex CLI without losing the\n"
+            "current one. The current login is saved as a managed account first,\n"
+            "then `codex login` runs; the new login is saved as an account too.\n\n"
+            "Extra options (for example --device-auth) are passed to `codex login`."
+        )
+        return
+    debug = "--debug" in argv
+    argv = [a for a in argv if a != "--debug"]
+    try:
+        switcher = CodexAccountSwitcher(debug=debug)
+        switcher.login(argv)
+    except ClaudeSwitchError as e:
+        error(f"Error: {e}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print(f"\n{dimmed('Operation cancelled')}")
+        sys.exit(130)
+
+
 def _try_codex_switcher(debug: bool) -> CodexAccountSwitcher | None:
     """A Codex switcher for the TUI, or ``None`` when it cannot be built.
 
@@ -1058,9 +1088,12 @@ def main() -> None:
         if argv[0] in _CODEX_UNSUPPORTED_VERBS:
             error(
                 f"Error: '{_prog_name()} codex {argv[0]}' is not supported; Codex "
-                "support covers add, list, status, switch, remove and alias"
+                "support covers login, add, list, status, switch, remove and alias"
             )
             sys.exit(2)
+        if argv[0] == "login":
+            _codex_login_command(argv[1:])
+            return
 
     # `run` and `auto` keep their dedicated pre-dispatch parsers.
     if argv and argv[0] == "run":
@@ -1145,7 +1178,7 @@ Commands:
   %(prog)s upgrade                    self-upgrade to latest
   %(prog)s purge                      remove all claude-swap data
   %(prog)s codex <command>            manage Codex CLI (ChatGPT) logins:
-                                      add, list, status, switch, remove, alias
+                                      login, add, list, status, switch, remove, alias
 
 Aliases: ls=list  rm=remove  update=upgrade""",
         formatter_class=argparse.RawDescriptionHelpFormatter,

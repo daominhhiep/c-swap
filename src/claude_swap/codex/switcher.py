@@ -12,6 +12,9 @@ accounts.
 from __future__ import annotations
 
 import logging
+import shutil
+import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -64,9 +67,13 @@ KIND = "chatgpt"
 _CODEX_SENTINEL_NOTES = {
     **SENTINEL_NOTES,
     USAGE_RELOGIN_REQUIRED: (
-        "re-login needed — refresh token dead; run `codex login`, then: ccswap codex add"
+        "re-login needed — refresh token dead; run: ccswap codex login"
     ),
 }
+
+# `codex login` revokes whatever login it finds before starting a new one, so
+# the only safe way to add a second account is through `ccswap codex login`.
+_LOGIN_HINT = "To add another account run `ccswap codex login` (a plain `codex login` would revoke this one)"
 
 
 def _usage_lines(entry: UsageEntry) -> list[str]:
@@ -213,6 +220,7 @@ class CodexAccountSwitcher:
                 )
                 self._logger.info("Updated Codex account %s", num)
                 print(f"{accent('Updated')} {self._label(num, accounts[num])}")
+                print(dimmed(_LOGIN_HINT))
                 return
 
             if slot is not None:
@@ -260,6 +268,86 @@ class CodexAccountSwitcher:
             )
         self._logger.info("Added Codex account %s", num)
         print(f"{accent('Added')} {self._label(num, record)}")
+
+    def login(self, codex_args: list[str] | None = None) -> None:
+        """Sign in to another ChatGPT account without losing the current one.
+
+        ``codex login`` revokes the login it finds in ``auth.json`` before it
+        starts a new one (``clear_existing_auth_before_login`` in the Codex
+        CLI), which kills the saved copy too. So: save the current login to
+        its slot, move the file out of the way, run ``codex login``, then
+        save the new login as an account. If the login fails or is
+        cancelled, the previous file is put back.
+        """
+        codex = shutil.which("codex")
+        if codex is None:
+            raise CodexAuthError("The `codex` command was not found on PATH")
+
+        stashed: dict | None = None
+        raw = self._store.read_live()
+        if raw is not None and codex_auth.auth_mode(raw) == "apikey":
+            # An API-key login: nothing ccswap manages, and `codex login`
+            # does not revoke it. Leave it to the Codex CLI.
+            print(dimmed("Current Codex login is an API key; leaving it to `codex login`"))
+            live = None
+        else:
+            live = self._live_identity()
+        if live is not None:
+            auth, identity = live
+            with self._store.lock():
+                data = self._store.read_sequence()
+                num = self._store.find_slot(identity.email, identity.account_id)
+                if num is None:
+                    num = str(self._store.next_number())
+                    data["accounts"][num] = {
+                        "email": identity.email,
+                        "accountId": identity.account_id,
+                        "planType": identity.plan_type,
+                        "added": datetime.now(timezone.utc).isoformat(),
+                    }
+                    data["sequence"].append(int(num))
+                    data["sequence"].sort()
+                    print(f"{accent('Saved')} current login as {self._label(num, data['accounts'][num])}")
+                else:
+                    data["accounts"][num]["planType"] = identity.plan_type
+                    print(f"{accent('Saved')} current login to {self._label(num, data['accounts'][num])}")
+                self._store.write_slot(num, auth)
+                data["activeAccountNumber"] = None
+                self._store.write_sequence(data)
+                self._store.delete_live()
+                stashed = auth
+
+        print(dimmed(f"Running: codex login {' '.join(codex_args or [])}".rstrip()))
+        sys.stdout.flush()
+        try:
+            rc = subprocess.call([codex, "login", *(codex_args or [])])
+        except KeyboardInterrupt:
+            rc = 130
+
+        new_live = self._store.read_live()
+        if rc != 0 or new_live is None or codex_auth.auth_mode(new_live) != "chatgpt":
+            if stashed is not None:
+                with self._store.lock():
+                    if self._store.read_live() is None:
+                        self._store.write_live(stashed)
+                        data = self._store.read_sequence()
+                        data["activeAccountNumber"] = int(
+                            self._store.find_slot(*self._identity_pair(stashed))
+                        )
+                        self._store.write_sequence(data)
+                print(dimmed("Previous Codex login restored"))
+            if rc == 130:
+                raise KeyboardInterrupt
+            raise CodexAuthError(
+                f"`codex login` exited with status {rc}" if rc != 0
+                else "`codex login` finished without a ChatGPT login"
+            )
+        self.add_account()
+
+    @staticmethod
+    def _identity_pair(auth: dict) -> tuple[str, str]:
+        ident = codex_auth.identity_from_auth(auth)
+        return ident.email, ident.account_id
 
     def remove_account(self, identifier: str, assume_yes: bool = False) -> None:
         data = self._require_roster()
@@ -334,8 +422,8 @@ class CodexAccountSwitcher:
             target_auth = self._store.read_slot(target)
             if target_auth is None:
                 raise CredentialReadError(
-                    f"Codex account {target} has no stored login — log in with "
-                    f"`codex login` and run `ccswap codex add --slot {target}`"
+                    f"Codex account {target} has no stored login — run "
+                    f"`ccswap codex login` and sign in as that account"
                 )
 
             from_ref = account_ref(None, "")
