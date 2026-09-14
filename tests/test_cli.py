@@ -1767,3 +1767,203 @@ def test_importing_the_module_allocates_no_temp_dir(tmp_path, tmp_path_factory):
     home = Path(_subprocess_env()["HOME"])
     assert home.is_dir(), f"the isolated HOME is not a real directory: {home}"
     assert home.is_relative_to(tmp_path_factory.getbasetemp()), f"{home} escapes basetemp"
+
+
+class TestCodexProvider:
+    """`ccswap codex <cmd>` / `--provider codex` route to the Codex switcher."""
+
+    @staticmethod
+    def _main(argv, codex_cls, claude_cls=None):
+        """Drive ``cli.main()`` with both switchers patched out."""
+        with patch("claude_swap.cli.ClaudeAccountSwitcher") as claude, \
+             patch("claude_swap.cli.CodexAccountSwitcher", codex_cls), \
+             patch.object(sys, "argv", ["ccswap", *argv]), \
+             patch("os.geteuid", return_value=1000, create=True), \
+             patch("claude_swap.update_check.check_for_update", return_value=None):
+            claude.return_value._is_running_in_container.return_value = False
+            cli.main()
+            return claude
+
+    def test_codex_list_json_routes_and_serializes(self, temp_home, capsys):
+        codex_cls = MagicMock()
+        codex_cls.return_value.list_accounts.return_value = {
+            "schemaVersion": 1, "provider": "codex", "accounts": [],
+        }
+        claude = self._main(["codex", "list", "--json"], codex_cls)
+        codex_cls.return_value.list_accounts.assert_called_once_with(json_output=True)
+        claude.return_value.list_accounts.assert_not_called()
+        assert json.loads(capsys.readouterr().out)["provider"] == "codex"
+
+    def test_provider_flag_switch_to_force(self, temp_home):
+        codex_cls = MagicMock()
+        codex_cls.return_value.switch_to.return_value = None
+        self._main(["--provider", "codex", "--switch-to", "2", "--force"], codex_cls)
+        codex_cls.return_value.switch_to.assert_called_once_with(
+            "2", json_output=False, force=True
+        )
+
+    def test_short_flag_add_with_slot_and_alias(self, temp_home):
+        codex_cls = MagicMock()
+        self._main(["add", "-p", "codex", "--slot", "3", "--alias", "work"], codex_cls)
+        codex_cls.return_value.add_account.assert_called_once_with(slot=3, alias="work")
+
+    def test_codex_verb_status_and_switch(self, temp_home):
+        codex_cls = MagicMock()
+        codex_cls.return_value.status.return_value = None
+        codex_cls.return_value.switch.return_value = None
+        self._main(["codex", "status"], codex_cls)
+        codex_cls.return_value.status.assert_called_once_with(json_output=False)
+        self._main(["codex", "switch"], codex_cls)
+        codex_cls.return_value.switch.assert_called_once_with(json_output=False)
+
+    def test_codex_remove(self, temp_home):
+        codex_cls = MagicMock()
+        self._main(["codex", "remove", "2"], codex_cls)
+        codex_cls.return_value.remove_account.assert_called_once_with("2")
+
+    def test_provider_codex_rejects_export(self, temp_home, capsys):
+        with pytest.raises(SystemExit) as exc:
+            self._main(["--provider", "codex", "--export", "x"], MagicMock())
+        assert exc.value.code == 2
+        assert "--provider codex only works with" in capsys.readouterr().err
+
+    def test_provider_codex_rejects_token_status(self, temp_home, capsys):
+        with pytest.raises(SystemExit) as exc:
+            self._main(["codex", "list", "--token-status"], MagicMock())
+        assert exc.value.code == 2
+        assert "not available for Codex" in capsys.readouterr().err
+
+    @pytest.mark.parametrize("verb", ["run", "auto", "map", "export", "menubar"])
+    def test_codex_unsupported_verbs_exit_2(self, temp_home, capsys, verb):
+        codex_cls = MagicMock()
+        with pytest.raises(SystemExit) as exc:
+            self._main(["codex", verb, "1"], codex_cls)
+        assert exc.value.code == 2
+        codex_cls.assert_not_called()
+
+    def test_bare_codex_shows_help(self, temp_home, capsys):
+        with pytest.raises(SystemExit) as exc:
+            self._main(["codex"], MagicMock())
+        assert exc.value.code == 0
+        assert "codex <command>" in capsys.readouterr().out
+
+    # -- the `add` menu -------------------------------------------------------
+
+    def _add_via_menu(self, choice, codex_cls, claude_ret=None):
+        with patch("sys.stdin.isatty", return_value=True), \
+             patch("sys.stdout.isatty", return_value=True), \
+             patch("builtins.input", return_value=choice):
+            return self._main(["add"], codex_cls)
+
+    def test_add_menu_choice_2_is_codex(self, temp_home, capsys):
+        codex_cls = MagicMock()
+        claude = self._add_via_menu("2", codex_cls)
+        codex_cls.return_value.add_account.assert_called_once_with(slot=None, alias=None)
+        claude.return_value.add_account.assert_not_called()
+        assert "[2] OpenAI Codex" in capsys.readouterr().out
+
+    @pytest.mark.parametrize("choice", ["", "1"])
+    def test_add_menu_default_is_claude(self, temp_home, choice):
+        codex_cls = MagicMock()
+        claude = self._add_via_menu(choice, codex_cls)
+        claude.return_value.add_account.assert_called_once_with(slot=None, alias=None)
+        codex_cls.assert_not_called()
+
+    def test_add_menu_bad_choice_exits_1(self, temp_home, capsys):
+        with pytest.raises(SystemExit) as exc:
+            self._add_via_menu("9", MagicMock())
+        assert exc.value.code == 1
+        assert "Invalid choice" in capsys.readouterr().err
+
+    def test_add_menu_eof_is_claude(self, temp_home):
+        codex_cls = MagicMock()
+        with patch("sys.stdin.isatty", return_value=True), \
+             patch("sys.stdout.isatty", return_value=True), \
+             patch("builtins.input", side_effect=EOFError):
+            claude = self._main(["add"], codex_cls)
+        claude.return_value.add_account.assert_called_once()
+        codex_cls.assert_not_called()
+
+    def test_add_non_tty_defaults_to_claude_without_prompt(self, temp_home, capsys):
+        codex_cls = MagicMock()
+        with patch("sys.stdin.isatty", return_value=False), \
+             patch("sys.stdout.isatty", return_value=False), \
+             patch("builtins.input", side_effect=AssertionError("must not prompt")):
+            claude = self._main(["add"], codex_cls)
+        claude.return_value.add_account.assert_called_once()
+        assert "OpenAI Codex" not in capsys.readouterr().out
+
+    def test_flag_skips_menu_on_tty(self, temp_home):
+        codex_cls = MagicMock()
+        with patch("sys.stdin.isatty", return_value=True), \
+             patch("sys.stdout.isatty", return_value=True), \
+             patch("builtins.input", side_effect=AssertionError("must not prompt")):
+            self._main(["codex", "add"], codex_cls)
+        codex_cls.return_value.add_account.assert_called_once()
+
+    def test_list_never_prompts_on_tty(self, temp_home):
+        codex_cls = MagicMock()
+        with patch("sys.stdin.isatty", return_value=True), \
+             patch("sys.stdout.isatty", return_value=True), \
+             patch("builtins.input", side_effect=AssertionError("must not prompt")):
+            claude = self._main(["list"], codex_cls)
+        claude.return_value.list_accounts.assert_called_once()
+
+    # -- alias ----------------------------------------------------------------
+
+    def test_codex_alias_dispatch(self, temp_home):
+        with patch("claude_swap.cli._alias_command") as alias_fn, \
+             patch.object(sys, "argv", ["ccswap", "codex", "alias", "1", "work"]):
+            cli.main()
+        alias_fn.assert_called_once_with(["1", "work"], provider="codex")
+
+    def test_alias_command_with_codex_provider(self, temp_home, capsys):
+        codex_cls = MagicMock()
+        codex_cls.return_value.set_alias.return_value = ("1", "work")
+        with patch("claude_swap.cli.CodexAccountSwitcher", codex_cls), \
+             patch("os.geteuid", return_value=1000, create=True):
+            cli._alias_command(["1", "work"], provider="codex")
+        codex_cls.return_value.set_alias.assert_called_once_with("1", "work")
+        assert "for Codex account 1" in capsys.readouterr().out
+
+    def test_alias_list_with_codex_provider(self, temp_home, capsys):
+        codex_cls = MagicMock()
+        codex_cls.return_value.list_aliases.return_value = [("1", "work", "a@b.c")]
+        with patch("claude_swap.cli.CodexAccountSwitcher", codex_cls), \
+             patch("os.geteuid", return_value=1000, create=True):
+            cli._alias_command([], provider="codex")
+        assert "Codex aliases:" in capsys.readouterr().out
+
+    # -- TUI ------------------------------------------------------------------
+
+    def test_tui_receives_codex_switcher(self, temp_home, monkeypatch):
+        from claude_swap import tui
+
+        seen = {}
+
+        def fake_run(switcher, start="dashboard", codex_switcher=None):
+            seen["codex"] = codex_switcher
+            return 0
+
+        monkeypatch.setattr(tui, "run", fake_run)
+        codex_cls = MagicMock()
+        with pytest.raises(SystemExit) as exc:
+            self._main(["tui"], codex_cls)
+        assert exc.value.code == 0
+        assert seen["codex"] is codex_cls.return_value
+
+    def test_tui_still_opens_when_codex_init_fails(self, temp_home, monkeypatch):
+        from claude_swap import tui
+
+        seen = {}
+
+        def fake_run(switcher, start="dashboard", codex_switcher=None):
+            seen["codex"] = codex_switcher
+            return 0
+
+        monkeypatch.setattr(tui, "run", fake_run)
+        codex_cls = MagicMock(side_effect=RuntimeError("no codex here"))
+        with pytest.raises(SystemExit) as exc:
+            self._main(["watch"], codex_cls)
+        assert exc.value.code == 0
+        assert seen["codex"] is None

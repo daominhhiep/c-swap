@@ -11,14 +11,20 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from claude_swap.codex.switcher import CodexAccountSwitcher
     from claude_swap.switcher import ClaudeAccountSwitcher
 
 
-def run(switcher: "ClaudeAccountSwitcher", start: str = "dashboard") -> int:
+def run(
+    switcher: "ClaudeAccountSwitcher",
+    start: str = "dashboard",
+    codex_switcher: "CodexAccountSwitcher | None" = None,
+) -> int:
     """Run the TUI over an existing switcher. Returns the process exit code.
 
     ``start="watch"`` (the ``ccswap watch`` command) opens directly on the
-    live watch page, stacked over the dashboard.
+    live watch page, stacked over the dashboard. ``codex_switcher`` adds the
+    managed Codex CLI accounts as their own group in every account view.
     """
     from claude_swap.appearance import detect_terminal_background, drain_stdin
     from claude_swap.tui.app import CswapApp
@@ -32,7 +38,7 @@ def run(switcher: "ClaudeAccountSwitcher", start: str = "dashboard") -> int:
         detected = detect_terminal_background()
     except Exception:
         detected = None
-    app = CswapApp(switcher, start=start, detected=detected)
+    app = CswapApp(switcher, start=start, detected=detected, codex_switcher=codex_switcher)
     # Drain any late OSC reply immediately before Textual's driver starts,
     # so it isn't reissued as keystrokes once the app takes over the terminal.
     try:

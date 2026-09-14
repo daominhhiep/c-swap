@@ -170,6 +170,35 @@ Run `ccswap` on its own (or `ccswap tui`) for the full-screen dashboard: live us
 
 <img src="assets/tui-watch.png" width="760" alt="ccswap watch — live 5h/7d usage bars for every account, with reset times and the active account marked">
 
+### OpenAI Codex CLI accounts (experimental)
+
+`ccswap` can also keep several **Codex CLI** (ChatGPT) logins and swap between them. Codex accounts live in their own numbered list — Codex slot 1 and Claude slot 1 are unrelated.
+
+```bash
+codex login                      # log in to the Codex CLI as usual
+ccswap add                       # pick "[2] OpenAI Codex" from the menu
+ccswap codex add                 # ...or skip the menu (also: ccswap add --provider codex)
+
+codex login                      # log in as another ChatGPT account
+ccswap codex add                 # save it as Codex account 2
+
+ccswap codex list                # accounts with 5h / weekly usage
+ccswap codex switch              # rotate to the next account
+ccswap codex switch 2            # jump to account 2 (number, email or alias)
+ccswap codex status              # who the Codex CLI is logged in as
+ccswap codex alias 2 work        # short name, usable wherever a number is
+ccswap codex remove 2
+```
+
+The dashboard (`ccswap`) lists Codex accounts under a **Codex** heading next to the Claude ones; switching, adding the current Codex login and removing work from the same menus.
+
+Notes:
+
+- Only ChatGPT logins (`codex login`) are supported. An API-key login is left alone, and a Codex CLI configured with `cli_auth_credentials_store = "keyring"` is not supported — use the default file store.
+- Switching copies the saved login over `~/.codex/auth.json` (or `$CODEX_HOME/auth.json`). Restart any running `codex` session afterwards so it picks up the new login.
+- Usage percentages come from an unofficial ChatGPT usage endpoint (the one the Codex CLI's `/status` reads from); if it changes, `list` keeps working and only the usage lines go blank.
+- Not covered yet: auto-switching, session mode (`run`), export/import and the menu bar app — those remain Claude-only.
+
 ### Refresh expired tokens
 
 If an account's token expires, log back into Claude Code with that account and re-run:
@@ -201,6 +230,7 @@ ccswap move 2 1                  # Assign an account to a slot (relocates to an 
 ccswap unclaimed                 # List stashed credential entries (slot + why they were stashed)
 ccswap unclaimed --purge ID      # Drop one (deletes its bytes; recover with /login + `ccswap add`)
 ccswap tui                       # Interactive dashboard (also: bare `ccswap`)
+ccswap codex <command>           # Same add/list/switch/status/remove/alias for Codex CLI logins
 ccswap watch                     # Dashboard, opened on the live watch page
 ccswap upgrade                   # Upgrade claude-swap to the latest version
 ccswap purge                     # Remove all claude-swap data
@@ -232,7 +262,7 @@ The original flag spellings (`ccswap --switch`, `ccswap --list`, ...) keep worki
 | macOS | macOS Keychain | `~/.claude-swap-backup/` |
 | Linux / WSL | File-based (inside the backup directory, under `credentials/`) | `${XDG_DATA_HOME:-~/.local/share}/claude-swap/` |
 
-Session-mode profiles (`ccswap run`) live under the backup directory in `sessions/`. Tool preferences (`settings.json`) and auto-switch state (`autoswitch_state.json` — cooldown and quarantined accounts; delete it to reset) live in the backup directory root.
+Session-mode profiles (`ccswap run`) live under the backup directory in `sessions/`. Saved Codex CLI logins live under `codex/` in the same directory (`sequence.json`, `auth/<n>.json`, `cache/`). Tool preferences (`settings.json`) and auto-switch state (`autoswitch_state.json` — cooldown and quarantined accounts; delete it to reset) live in the backup directory root.
 
 On Linux/WSL, set `XDG_DATA_HOME` to override the default location.
 
@@ -333,6 +363,8 @@ Usage is served from a per-account cache: when the usage API is briefly unreacha
 A row carries an additive `loginExpiresAt` (ISO-8601 UTC) when the stored login records when its refresh token expires, which is the moment the slot will need a fresh `/login` and `ccswap add --slot N`; a script can warn a few days ahead instead of discovering `relogin_required`. Absent when Claude Code recorded no such date for that login.
 
 An account row also carries an additive `alias` field once one is set with `ccswap alias` (e.g. `"alias": "dev"`); accounts without one simply omit the key.
+
+`ccswap codex list --json` / `status --json` / `switch --json` use the same shapes with an additive `"provider": "codex"` at the top level; Codex rows add `planType` (e.g. `plus`, `pro`) and `accountId`. Claude payloads are unchanged.
 
 Weekly windows (`sevenDay` and per-model `scoped` entries — never `fiveHour`) additively carry pace fields once the week is ~a day old: `expectedPct` (where usage would sit if spread evenly across the week) and `aheadOfPace` (`true` when meaningfully above that — the same signal the human views show as an `(ahead)`/`(ahead of pace)` marker). `projectedExhaustionAt`/`willLastToReset` extrapolate the current rate into an ETA to 100% and a yes/no "will it last to the reset"; they stay `--json`-only since a linear projection is too rough to present as fact in the UI.
 

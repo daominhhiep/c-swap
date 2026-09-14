@@ -25,8 +25,8 @@ from textual.binding import Binding
 from textual.screen import Screen
 from textual.widgets import Footer, ListView, Static
 
-from claude_swap.models import AccountsSnapshot
-from claude_swap.tui.widgets import AccountItem, AccountsPanel, MenuItem
+from claude_swap.models import AccountSnapshot, AccountsSnapshot
+from claude_swap.tui.widgets import AccountItem, AccountsPanel, MenuItem, SectionItem
 
 if TYPE_CHECKING:
     from claude_swap.tui.app import CswapApp
@@ -85,22 +85,29 @@ class DashboardScreen(Screen):
         ]
 
     def _add_entries(self) -> MenuEntries:
-        return [
+        entries: MenuEntries = [
             ("From current Claude Code login", "add-login"),
             ("From a setup-token / API key…", "add-token"),
-            _BACK,
         ]
+        if self.app.codex_switcher is not None:
+            entries.append(("From current Codex CLI login", "add-codex"))
+        entries.append(_BACK)
+        return entries
 
     def _remove_entries(self) -> MenuEntries:
-        snap = self.app.snapshot
-        entries: MenuEntries = [
-            (
-                f"{acc.number}  {f'{acc.alias} ({acc.email})' if acc.alias else acc.email}"
-                f"  [{acc.display_tag}]",
-                f"remove:{acc.number}",
+        entries: MenuEntries = []
+        for acc in self.app.all_accounts():
+            # Claude rows keep the bare `remove:N` id; Codex rows carry their
+            # provider since slot numbers repeat across the two groups.
+            codex = acc.provider == "codex"
+            entries.append(
+                (
+                    f"{'Codex ' if codex else ''}{acc.number}  "
+                    f"{f'{acc.alias} ({acc.email})' if acc.alias else acc.email}"
+                    f"  [{acc.display_tag}]",
+                    f"remove:codex:{acc.number}" if codex else f"remove:{acc.number}",
+                )
             )
-            for acc in (snap.accounts if snap else ())
-        ]
         entries.append(_BACK)
         return entries
 
@@ -163,6 +170,7 @@ class DashboardScreen(Screen):
             "auto": app.action_open_auto,
             "add-login": app.action_add_current,
             "add-token": app.action_add_token,
+            "add-codex": app.action_add_codex_current,
             "quit": app.exit,
         }
         if action_id == "back":
@@ -172,13 +180,17 @@ class DashboardScreen(Screen):
         elif action_id == "remove-menu":
             await self._push_menu("remove account", self._remove_entries())
         elif action_id.startswith("remove:"):
-            number = action_id.split(":", 1)[1]
-            snap = app.snapshot
+            parts = action_id.split(":")
+            provider, number = (parts[1], parts[2]) if len(parts) == 3 else ("claude", parts[1])
             email = next(
-                (a.email for a in (snap.accounts if snap else ()) if a.number == number),
+                (
+                    a.email
+                    for a in app.all_accounts()
+                    if a.number == number and a.provider == provider
+                ),
                 "?",
             )
-            app.confirm_remove(number, email)
+            app.confirm_remove(number, email, provider)
         elif action_id == "theme-menu":
             await self._push_menu("theme", self._theme_entries())
         elif action_id.startswith("theme:"):
@@ -223,7 +235,7 @@ class AccountListScreen(Screen):
 
     def __init__(self) -> None:
         super().__init__()
-        self._numbers: list[str] = []
+        self._keys: list[str] = []
         self._stamps: dict[str, float | None] = {}
 
     def compose(self) -> ComposeResult:
@@ -233,57 +245,96 @@ class AccountListScreen(Screen):
 
     def on_mount(self) -> None:
         self.watch(self.app, "snapshot", self._on_snapshot)
+        self.watch(self.app, "codex_snapshot", self._on_codex_snapshot)
 
     async def _on_snapshot(self, snap: AccountsSnapshot | None) -> None:
         if snap is None:
             return
+        await self._rebuild()
+
+    async def _on_codex_snapshot(self, snap: AccountsSnapshot | None) -> None:
+        if self.app.snapshot is None:
+            return  # the Claude snapshot's arrival builds the list
+        await self._rebuild()
+
+    def _rows(self) -> list[AccountSnapshot | str]:
+        """Claude accounts, then — when there are any — a "Codex" section
+        header and the Codex accounts. The header is a plain string; the
+        Claude group needs none since it is where the list always starts."""
+        app = self.app
+        rows: list[AccountSnapshot | str] = list(app.snapshot.accounts) if app.snapshot else []
+        codex = app.codex_snapshot
+        if codex is not None and codex.accounts:
+            rows.append("Codex")
+            rows.extend(codex.accounts)
+        return rows
+
+    async def _rebuild(self) -> None:
         listview = self.query_one("#accounts", ListView)
-        numbers = [acc.number for acc in snap.accounts]
-        if numbers != self._numbers:
-            first_build = not self._numbers
+        rows = self._rows()
+        keys = [row.key if isinstance(row, AccountSnapshot) else f"#{row}" for row in rows]
+        accounts = [row for row in rows if isinstance(row, AccountSnapshot)]
+        if keys != self._keys:
+            first_build = not self._keys
             previous = listview.index
             await listview.clear()
-            await listview.extend(AccountItem(acc) for acc in snap.accounts)
-            self._numbers = numbers
+            await listview.extend(
+                AccountItem(row) if isinstance(row, AccountSnapshot) else SectionItem(row)
+                for row in rows
+            )
+            self._keys = keys
             listview.index = (
-                self._index_after_build(snap, first_build, previous)
-                if numbers
+                self._index_after_build(rows, first_build, previous)
+                if accounts
                 else None
             )
         else:
-            for item, acc in zip(listview.query(AccountItem), snap.accounts):
+            for item, acc in zip(listview.query(AccountItem), accounts):
                 item.set_account(acc)
-        self._flash_updated(snap, listview)
+        self._flash_updated(accounts, listview)
 
     def _index_after_build(
-        self, snap: AccountsSnapshot, first_build: bool, previous: int | None
+        self, rows: list, first_build: bool, previous: int | None
     ) -> int | None:
         """Where the cursor lands after the list is (re)built."""
         if first_build:
-            return self._active_index(snap)
-        return min(previous or 0, len(snap.accounts) - 1)
+            return self._active_index(rows)
+        index = min(previous or 0, len(rows) - 1)
+        if not isinstance(rows[index], AccountSnapshot):
+            index = self._active_index(rows)
+        return index
 
-    def _active_index(self, snap: AccountsSnapshot) -> int:
+    def _active_index(self, rows: list | None = None) -> int:
+        """List index of the active Claude account (else the first account)."""
+        if rows is None:
+            rows = self._rows()
+        snap = self.app.snapshot
+        active = snap.active_number if snap else None
+        first_account = next(
+            (i for i, row in enumerate(rows) if isinstance(row, AccountSnapshot)), 0
+        )
         return next(
             (
                 i
-                for i, acc in enumerate(snap.accounts)
-                if acc.number == snap.active_number
+                for i, row in enumerate(rows)
+                if isinstance(row, AccountSnapshot)
+                and row.provider == "claude"
+                and row.number == active
             ),
-            0,
+            first_account,
         )
 
-    def _flash_updated(self, snap: AccountsSnapshot, listview: ListView) -> None:
+    def _flash_updated(self, accounts: list[AccountSnapshot], listview: ListView) -> None:
         """Briefly highlight rows whose stored measurement just advanced."""
-        new_stamps = {acc.number: acc.usage.fetched_at for acc in snap.accounts}
+        new_stamps = {acc.key: acc.usage.fetched_at for acc in accounts}
         if self._stamps:
             changed = {
-                num
-                for num, ts in new_stamps.items()
-                if ts is not None and ts != self._stamps.get(num)
+                key
+                for key, ts in new_stamps.items()
+                if ts is not None and ts != self._stamps.get(key)
             }
             for item in listview.query(AccountItem):
-                if item.number in changed and not item.has_class("flash"):
+                if item.key in changed and not item.has_class("flash"):
                     item.add_class("flash")
                     self.set_timer(FLASH_S, partial(item.remove_class, "flash"))
         self._stamps = new_stamps
@@ -317,7 +368,7 @@ class SwitchScreen(AccountListScreen):
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         item = event.item
         if isinstance(item, AccountItem):
-            self.app.do_switch(item.number)
+            self.app.do_switch(item.number, item.provider)
             self.app.pop_screen()
 
     def action_select_highlighted(self) -> None:
@@ -374,20 +425,19 @@ class WatchScreen(AccountListScreen):
         return True
 
     def _index_after_build(
-        self, snap: AccountsSnapshot, first_build: bool, previous: int | None
+        self, rows: list, first_build: bool, previous: int | None
     ) -> int | None:
         if not self._selecting:
             return None  # monitor mode: no cursor at all
-        return super()._index_after_build(snap, first_build, previous)
+        return super()._index_after_build(rows, first_build, previous)
 
     def _set_selecting(self, on: bool) -> None:
         self._selecting = on
         listview = self.query_one("#accounts", ListView)
         title = self.query_one("#list-title", Static)
         if on:
-            snap = self.app.snapshot
-            if snap is not None and snap.accounts:
-                listview.index = self._active_index(snap)
+            if any(isinstance(row, AccountSnapshot) for row in self._rows()):
+                listview.index = self._active_index()
             listview.focus()
             title.update(self._SELECT_TITLE)
         else:
@@ -404,7 +454,7 @@ class WatchScreen(AccountListScreen):
             return  # e.g. a stray click while just watching
         item = event.item
         if isinstance(item, AccountItem):
-            self.app.do_switch(item.number)
+            self.app.do_switch(item.number, item.provider)
             self._set_selecting(False)  # stay here, keep watching
 
     def action_select_highlighted(self) -> None:

@@ -8,7 +8,7 @@ import os
 import sys
 
 from claude_swap import __version__, paths, printer
-from claude_swap.exceptions import ClaudeSwitchError
+from claude_swap.exceptions import ClaudeSwitchError, ValidationError
 from claude_swap.json_output import error_envelope
 from claude_swap.printer import (
     accent,
@@ -21,6 +21,7 @@ from claude_swap.printer import (
 )
 from claude_swap.settings import load_ui_settings
 from claude_swap.switcher import ClaudeAccountSwitcher
+from claude_swap.codex.switcher import CodexAccountSwitcher
 
 
 def _prog_name() -> str:
@@ -67,6 +68,12 @@ _SUBCOMMAND_FLAGS = {
     "watch": "--watch",
     "menubar": "--menubar",
 }
+
+
+# Verbs with their own pre-dispatch parsers that have no Codex counterpart.
+_CODEX_UNSUPPORTED_VERBS = frozenset(
+    {"run", "auto", "map", "unmap", "unclaimed", "swap", "move", "config", "menubar"}
+)
 
 
 def _translate_subcommand(argv: list[str]) -> list[str]:
@@ -498,8 +505,10 @@ Examples:
         sys.exit(130)
 
 
-def _alias_command(argv: list[str]) -> None:
+def _alias_command(argv: list[str], provider: str | None = None) -> None:
     """Handle `ccswap alias [NUM|EMAIL] [NAME] [--unset]`.
+
+    ``provider`` (or ``--provider codex``) aliases a Codex account instead.
 
     With no arguments, lists all aliases. Otherwise sets (or, with --unset,
     removes) the alias for the given account. Pre-dispatched before the main
@@ -535,6 +544,10 @@ Examples:
         help="Alias to set (letters, digits, ., -, _; not purely numeric).",
     )
     parser.add_argument("--unset", action="store_true", help="Remove the account's alias")
+    parser.add_argument(
+        "--provider", "-p", choices=("claude", "codex"), default=provider,
+        help="Alias a Claude (default) or Codex account",
+    )
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     args = parser.parse_args(argv)
 
@@ -548,23 +561,28 @@ Examples:
     try:
         switcher = ClaudeAccountSwitcher(debug=args.debug)
         _guard_root(switcher)
+        target = switcher
+        label = "Account"
+        if args.provider == "codex":
+            target = CodexAccountSwitcher(debug=args.debug)
+            label = "Codex account"
 
         if args.account is None:
-            rows = switcher.list_aliases()
+            rows = target.list_aliases()
             if not rows:
                 print(dimmed("No aliases set"))
                 return
-            print(bolded("Aliases:"))
+            print(bolded("Codex aliases:" if args.provider == "codex" else "Aliases:"))
             for num, alias_name, email in rows:
                 print(f"  {num}: {alias_name} {muted(f'({email})')}")
             return
 
         if args.unset:
-            account_num = switcher.unset_alias(args.account)
-            print(f"{accent('Removed alias')} for Account {account_num}")
+            account_num = target.unset_alias(args.account)
+            print(f"{accent('Removed alias')} for {label} {account_num}")
         else:
-            account_num, normalized = switcher.set_alias(args.account, args.alias_name)
-            print(f"{accent('Set alias')} '{normalized}' for Account {account_num}")
+            account_num, normalized = target.set_alias(args.account, args.alias_name)
+            print(f"{accent('Set alias')} '{normalized}' for {label} {account_num}")
     except ClaudeSwitchError as e:
         error(f"Error: {e}")
         sys.exit(1)
@@ -973,6 +991,46 @@ def _menubar_service(args) -> int:
     return 0
 
 
+def _select_provider(args) -> str:
+    """Which switcher a command goes to: the flag, or an `add`-time menu.
+
+    Only ``add`` asks, and only on a terminal (both ends a TTY) — every other
+    command and every scripted call defaults to Claude, so existing
+    behavior and tests are untouched. Enter keeps the Claude default.
+    """
+    if args.provider:
+        return args.provider
+    if not args.add_account or not (sys.stdin.isatty() and sys.stdout.isatty()):
+        return "claude"
+    print(bolded("Add an account for which CLI?"))
+    print("  [1] Claude Code")
+    print("  [2] OpenAI Codex")
+    try:
+        choice = input("Choice [1]: ").strip()
+    except EOFError:
+        return "claude"
+    if choice in ("", "1"):
+        return "claude"
+    if choice == "2":
+        return "codex"
+    raise ValidationError(f"Invalid choice: {choice!r} (expected 1 or 2)")
+
+
+def _try_codex_switcher(debug: bool) -> CodexAccountSwitcher | None:
+    """A Codex switcher for the TUI, or ``None`` when it cannot be built.
+
+    The dashboard is primarily the Claude view; a Codex-side problem must
+    never keep it from opening.
+    """
+    try:
+        return CodexAccountSwitcher(debug=debug)
+    except Exception as e:  # noqa: BLE001 - best effort, logged only
+        import logging
+
+        logging.getLogger("claude-swap").debug("Codex switcher unavailable: %r", e)
+        return None
+
+
 def main() -> None:
     """Main entry point for the CLI."""
     force_utf8_output()
@@ -988,6 +1046,21 @@ def main() -> None:
         printer.set_theme(name)
     except Exception:
         pass  # theme is cosmetic; never block the CLI on it
+
+    # `ccswap codex <command>` manages Codex CLI (ChatGPT) logins: the verb
+    # is stripped here and re-attached as `--provider codex` once the main
+    # subcommand has been translated. Only the core commands exist for Codex.
+    provider_verb: str | None = None
+    if argv and argv[0] == "codex":
+        provider_verb, argv = "codex", argv[1:]
+        if not argv:
+            argv = ["help"]
+        if argv[0] in _CODEX_UNSUPPORTED_VERBS:
+            error(
+                f"Error: '{_prog_name()} codex {argv[0]}' is not supported; Codex "
+                "support covers add, list, status, switch, remove and alias"
+            )
+            sys.exit(2)
 
     # `run` and `auto` keep their dedicated pre-dispatch parsers.
     if argv and argv[0] == "run":
@@ -1009,7 +1082,10 @@ def main() -> None:
         _unclaimed_command(argv[1:])
         return
     if argv and argv[0] == "alias":
-        _alias_command(argv[1:])
+        if provider_verb is None:
+            _alias_command(argv[1:])
+        else:
+            _alias_command(argv[1:], provider=provider_verb)
         return
     if argv and argv[0] == "swap":
         _swap_command(argv[1:])
@@ -1028,6 +1104,8 @@ def main() -> None:
     # are rewritten to the equivalent flags so the original `--flag` interface
     # keeps working unchanged.
     argv = _translate_subcommand(argv)
+    if provider_verb is not None:
+        argv = ["--provider", provider_verb, *argv]
 
     parser = argparse.ArgumentParser(
         prog=_prog_name(),
@@ -1066,10 +1144,13 @@ Commands:
   %(prog)s menubar --install-service  keep the menu bar running via launchd
   %(prog)s upgrade                    self-upgrade to latest
   %(prog)s purge                      remove all claude-swap data
+  %(prog)s codex <command>            manage Codex CLI (ChatGPT) logins:
+                                      add, list, status, switch, remove, alias
 
 Aliases: ls=list  rm=remove  update=upgrade""",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Flags combine with subcommands:
+  %(prog)s add --provider codex             # back up the Codex CLI login (same as: codex add)
   %(prog)s switch --strategy best           # pick the account with most quota left
   %(prog)s switch --strategy next-available # rotate, skipping rate-limited accounts
   %(prog)s switch user@example.com
@@ -1107,6 +1188,16 @@ The original flag spellings (%(prog)s --switch, %(prog)s --list, ...) keep worki
         help=(
             "Emit machine-readable JSON to stdout (use with 'list', 'status', "
             "or 'switch'). See README 'JSON output for scripting'."
+        ),
+    )
+    parser.add_argument(
+        "--provider",
+        "-p",
+        choices=("claude", "codex"),
+        default=None,
+        help=(
+            "Which CLI's login to manage: claude (default) or codex. "
+            "'add' asks on a terminal when omitted. Same as the 'codex' verb prefix."
         ),
     )
     parser.add_argument(
@@ -1347,6 +1438,24 @@ The original flag spellings (%(prog)s --switch, %(prog)s --list, ...) keep worki
     if args.full and not args.export:
         parser.error("--full can only be used with 'export'")
 
+    if args.provider == "codex":
+        if not (
+            args.add_account
+            or args.list
+            or args.status
+            or args.switch
+            or args.switch_to is not None
+            or args.remove_account is not None
+        ):
+            parser.error(
+                "--provider codex only works with 'add', 'list', 'status', "
+                "'switch', 'switch <num|email>' and 'remove' (and 'alias')"
+            )
+        if args.token_status or args.strategy is not None or args.model is not None:
+            parser.error(
+                "--token-status, --strategy and --model are not available for Codex accounts"
+            )
+
     if (
         args.install_service or args.uninstall_service or args.service_status
     ) and not args.menubar:
@@ -1382,7 +1491,24 @@ The original flag spellings (%(prog)s --switch, %(prog)s --list, ...) keep worki
                 error("Error: Do not run this script as root (unless running in a container)")
                 sys.exit(1)
 
-        if args.add_account:
+        provider = _select_provider(args)
+        if provider == "codex":
+            codex = CodexAccountSwitcher(debug=args.debug)
+            if args.add_account:
+                codex.add_account(slot=args.slot, alias=args.alias)
+            elif args.remove_account is not None:
+                codex.remove_account(args.remove_account)
+            elif args.list:
+                payload = codex.list_accounts(json_output=args.json)
+            elif args.switch:
+                payload = codex.switch(json_output=args.json)
+            elif args.switch_to is not None:
+                payload = codex.switch_to(
+                    args.switch_to, json_output=args.json, force=args.force
+                )
+            elif args.status:
+                payload = codex.status(json_output=args.json)
+        elif args.add_account:
             switcher.add_account(slot=args.slot, alias=args.alias)
         elif args.add_token is not None:
             switcher.add_account_from_token(
@@ -1442,11 +1568,15 @@ The original flag spellings (%(prog)s --switch, %(prog)s --list, ...) keep worki
         elif args.tui:
             from claude_swap.tui import run as tui_run
 
-            sys.exit(tui_run(switcher))
+            sys.exit(tui_run(switcher, codex_switcher=_try_codex_switcher(args.debug)))
         elif args.watch:
             from claude_swap.tui import run as tui_run
 
-            sys.exit(tui_run(switcher, start="watch"))
+            sys.exit(
+                tui_run(
+                    switcher, start="watch", codex_switcher=_try_codex_switcher(args.debug)
+                )
+            )
         elif args.menubar:
             if sys.platform != "darwin":
                 error("The menu bar is only available on macOS.")

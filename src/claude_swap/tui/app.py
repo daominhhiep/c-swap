@@ -18,10 +18,11 @@ from textual.reactive import reactive
 from textual.worker import WorkerState
 
 from claude_swap import printer
-from claude_swap.models import AccountsSnapshot
+from claude_swap.models import AccountSnapshot, AccountsSnapshot
 from claude_swap.snapshot_source import account_identity
 from claude_swap.settings import load_settings, load_ui_settings, set_setting
 from claude_swap.switcher import ClaudeAccountSwitcher
+from claude_swap.codex.switcher import CodexAccountSwitcher
 from claude_swap.tui.autoview import AutoScreen
 from claude_swap.tui.dashboard import DashboardScreen, WatchScreen
 from claude_swap.tui.data import ActionResult, SnapshotSource, format_duration, run_action
@@ -47,6 +48,9 @@ class CswapApp(App):
     SNAPSHOT_AGE_NOTE_S = 60.0
 
     snapshot: reactive[AccountsSnapshot | None] = reactive(None)
+    # Managed Codex CLI accounts, taken in the same refresh pass; None while
+    # no Codex switcher is attached or before the first pass completes.
+    codex_snapshot: reactive[AccountsSnapshot | None] = reactive(None)
     refresh_status: reactive[str] = reactive("")
     busy: reactive[bool] = reactive(False)
 
@@ -56,12 +60,16 @@ class CswapApp(App):
         *,
         start: str = "dashboard",
         detected: str | None = None,
+        codex_switcher: CodexAccountSwitcher | None = None,
     ) -> None:
         super().__init__()
         self.switcher = switcher
+        self.codex_switcher = codex_switcher
         self._start = start  # "dashboard" | "watch" (`ccswap watch`)
         self._detected = detected  # terminal background sensed pre-driver, or None
         self.source = SnapshotSource(switcher)
+        self.codex_source = SnapshotSource(codex_switcher) if codex_switcher else None
+        self._last_codex_error = ""
         self._store_only = False
         self._full_next = False
         self._normal_refreshing = False
@@ -153,10 +161,26 @@ class CswapApp(App):
         self, generation: int, lane: str, full: bool, store_only: bool
     ) -> None:
         snap = self.source.take(full=full, store_only=store_only)
-        self.call_from_thread(self._apply_snapshot, generation, lane, snap)
+        codex: AccountsSnapshot | None = None
+        codex_error: str | None = None
+        if self.codex_source is not None:
+            # A Codex-side failure must never take the Claude view down with
+            # it: keep the previous Codex snapshot and surface the error once.
+            try:
+                codex = self.codex_source.take(full=full, store_only=store_only)
+            except Exception as e:  # noqa: BLE001
+                codex_error = str(e) or type(e).__name__
+        self.call_from_thread(
+            self._apply_snapshot, generation, lane, snap, codex, codex_error
+        )
 
     def _apply_snapshot(
-        self, generation: int, lane: str, snap: AccountsSnapshot
+        self,
+        generation: int,
+        lane: str,
+        snap: AccountsSnapshot,
+        codex: AccountsSnapshot | None = None,
+        codex_error: str | None = None,
     ) -> None:
         if lane == "normal":
             self._normal_refreshing = False
@@ -164,9 +188,15 @@ class CswapApp(App):
         else:
             self._store_refreshing = False
         self._last_refresh_error = ""
+        if codex_error is not None and codex_error != self._last_codex_error:
+            self._last_codex_error = codex_error
+            self.notify(f"Codex refresh failed: {codex_error}", severity="warning", timeout=6)
         if generation >= self._applied_generation:
             self._applied_generation = generation
             self.snapshot = snap
+            if codex_error is None:
+                self._last_codex_error = ""
+                self.codex_snapshot = codex
         elif self.snapshot is not None:
             # A later-started store repaint owns account metadata, but the
             # older worker may have completed a genuinely newer provider fetch.
@@ -283,7 +313,24 @@ class CswapApp(App):
 
     # -- account operations ----------------------------------------------------
 
-    def do_switch(self, number: str) -> None:
+    def all_accounts(self) -> list[AccountSnapshot]:
+        """Claude accounts followed by Codex accounts (each stamped with its
+        provider), for menus that list every managed account."""
+        rows = list(self.snapshot.accounts) if self.snapshot else []
+        if self.codex_snapshot is not None:
+            rows.extend(self.codex_snapshot.accounts)
+        return rows
+
+    def do_switch(self, number: str, provider: str = "claude") -> None:
+        if provider == "codex":
+            if self.codex_switcher is None:
+                self.notify("Codex support is unavailable", severity="warning")
+                return
+            self._start_action(
+                f"Switch to Codex account {number}",
+                partial(self.codex_switcher.switch_to, number, json_output=True),
+            )
+            return
         self._start_action(
             f"Switch to account {number}",
             partial(self.switcher.switch_to, number, json_output=True),
@@ -311,22 +358,59 @@ class CswapApp(App):
             partial(self.switcher.set_account_disabled, number, target),
         )
 
-    def confirm_remove(self, number: str, email: str) -> None:
+    def confirm_remove(self, number: str, email: str, provider: str = "claude") -> None:
+        label = "Codex account" if provider == "codex" else "account"
         self.push_screen(
             ConfirmModal(
-                f"Remove account {number} ({email})?\n\n"
+                f"Remove {label} {number} ({email})?\n\n"
                 "Its stored credentials and config backup are deleted.",
                 title="Remove account",
                 yes_label="Remove",
             ),
-            partial(self._on_remove_confirm, number),
+            partial(self._on_remove_confirm, number, provider),
         )
 
-    def _on_remove_confirm(self, number: str, confirmed: bool | None) -> None:
-        if confirmed:
+    def _on_remove_confirm(
+        self, number: str, provider: str, confirmed: bool | None
+    ) -> None:
+        if not confirmed:
+            return
+        if provider == "codex":
+            if self.codex_switcher is None:
+                self.notify("Codex support is unavailable", severity="warning")
+                return
             self._start_action(
-                f"Remove account {number}",
-                partial(self.switcher.remove_account, number, assume_yes=True),
+                f"Remove Codex account {number}",
+                partial(self.codex_switcher.remove_account, number, assume_yes=True),
+            )
+            return
+        self._start_action(
+            f"Remove account {number}",
+            partial(self.switcher.remove_account, number, assume_yes=True),
+        )
+
+    def action_add_codex_current(self) -> None:
+        if self.codex_switcher is None:
+            self.notify("Codex support is unavailable", severity="warning")
+            return
+        self.push_screen(
+            ConfirmModal(
+                "Back up the current Codex CLI login (~/.codex/auth.json) as a "
+                "managed account?\n\n"
+                "If this account is already managed, its stored login is "
+                "refreshed in place.",
+                title="Add Codex account",
+                yes_label="Add",
+            ),
+            self._on_add_codex_confirm,
+        )
+
+    def _on_add_codex_confirm(self, confirmed: bool | None) -> None:
+        if confirmed and self.codex_switcher is not None:
+            self._start_action(
+                "Add current Codex login",
+                partial(self.codex_switcher.add_account),
+                show_output=True,
             )
 
     def action_add_current(self) -> None:

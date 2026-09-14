@@ -910,3 +910,35 @@ def test_c0_a_scratch_home_still_protects_the_os_account_home_store(monkeypatch,
     assert scratch_root in roots, (
         "the scratch HOME's own root must stay protected too"
     )
+
+
+def test_frozen_specs_include_the_codex_home(monkeypatch, tmp_path):
+    """The Codex CLI's login file (``~/.codex/auth.json``, or
+    ``$CODEX_HOME/auth.json``) is a real credential store too: a test that
+    leaks the real ``$HOME`` must not be able to overwrite it."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr("pathlib.Path.home", lambda: home)
+    for var in ("CLAUDE_CONFIG_DIR", "CLAUDE_SECURESTORAGE_CONFIG_DIR",
+                "XDG_DATA_HOME", "CODEX_HOME"):
+        monkeypatch.delenv(var, raising=False)
+
+    specs = conftest._freeze_real_store_specs()
+    assert (home / ".codex", False) in specs
+
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "elsewhere"))
+    specs = conftest._freeze_real_store_specs()
+    assert (tmp_path / "elsewhere", False) in specs
+
+
+def test_write_into_codex_home_is_refused(tmp_path: Path, monkeypatch):
+    """A direct child of the Codex home (``auth.json``) is refused while the
+    guard is armed on it; the refusal happens before anything lands."""
+    codex_home = tmp_path / ".codex"
+    codex_home.mkdir()
+    monkeypatch.setattr(conftest, "_REAL_STORE_SPECS", ((codex_home, False),))
+
+    target = codex_home / "auth.json"
+    with pytest.raises(conftest.RealStoreWriteBlocked):
+        target.write_text("{}", encoding="utf-8")
+    assert not target.exists()

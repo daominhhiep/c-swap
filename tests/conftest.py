@@ -14,6 +14,7 @@ from unittest.mock import patch
 import pytest
 
 from claude_swap import macos_keychain as _macos_keychain
+from claude_swap.codex import paths as _codex_paths
 from claude_swap import paths as _paths
 
 
@@ -144,6 +145,9 @@ def _freeze_real_store_specs() -> tuple[tuple[Path, bool], ...]:
             # directory exists, so not one mkdir is attempted above them.
             (_paths.get_default_claude_config_home() / "projects", True),
             (_paths.get_claude_config_home() / "projects", True),
+            # The Codex CLI's home holds its live login (`auth.json`) as a
+            # direct child, next to unrelated state (sessions, sqlite).
+            (_codex_paths.get_codex_home(), False),
         )
 
     ambient_specs = _resolve()
@@ -162,7 +166,8 @@ def _freeze_real_store_specs() -> tuple[tuple[Path, bool], ...]:
                     os.environ[k] = v
 
     default_specs = _resolve_with_cleared(
-        "CLAUDE_CONFIG_DIR", "CLAUDE_SECURESTORAGE_CONFIG_DIR", "XDG_DATA_HOME"
+        "CLAUDE_CONFIG_DIR", "CLAUDE_SECURESTORAGE_CONFIG_DIR", "XDG_DATA_HOME",
+        "CODEX_HOME",
     )
     # C-0: a THIRD snapshot, additive to (not replacing) default_specs above.
     # The mandated review/CI isolation recipe sets HOME/USERPROFILE (and
@@ -182,7 +187,7 @@ def _freeze_real_store_specs() -> tuple[tuple[Path, bool], ...]:
     # used to protect.
     home_default_specs = _resolve_with_cleared(
         "CLAUDE_CONFIG_DIR", "CLAUDE_SECURESTORAGE_CONFIG_DIR", "XDG_DATA_HOME",
-        "HOME", "USERPROFILE",
+        "CODEX_HOME", "HOME", "USERPROFILE",
     )
 
     seen: set[Path] = set()
@@ -515,6 +520,7 @@ def _isolate_real_home(request, tmp_path_factory, monkeypatch):
     monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
     monkeypatch.delenv("CLAUDE_SECURESTORAGE_CONFIG_DIR", raising=False)
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    monkeypatch.delenv("CODEX_HOME", raising=False)
     if "temp_home" in request.fixturenames:
         return  # temp_home provides its own isolated home
     if "tmp_keychain" in request.fixturenames:
@@ -612,6 +618,103 @@ def mock_credentials_file(temp_home: Path):
     cred_path = temp_home / ".claude" / ".credentials.json"
     cred_path.write_text(json.dumps(creds))
     return cred_path
+
+
+# ---------------------------------------------------------------------------
+# Codex CLI (ChatGPT login) fixtures
+# ---------------------------------------------------------------------------
+
+
+def make_id_token(
+    email: str = "me@example.com",
+    account_id: str = "acct_123",
+    plan: str = "plus",
+    exp: float | None = None,
+    **extra_claims,
+) -> str:
+    """An unsigned JWT with the claims the Codex CLI's id_token carries."""
+    import base64
+    import time as _time
+
+    def seg(obj) -> str:
+        raw = json.dumps(obj, separators=(",", ":")).encode()
+        return base64.urlsafe_b64encode(raw).decode().rstrip("=")
+
+    claims = {
+        "email": email,
+        "exp": exp if exp is not None else _time.time() + 3600,
+        "https://api.openai.com/auth": {
+            "chatgpt_account_id": account_id,
+            "chatgpt_plan_type": plan,
+            "chatgpt_user_id": "user_1",
+        },
+        **extra_claims,
+    }
+    return f"{seg({'alg': 'RS256', 'typ': 'JWT'})}.{seg(claims)}.sig"
+
+
+def make_codex_auth(
+    email: str = "me@example.com",
+    account_id: str = "acct_123",
+    plan: str = "plus",
+    *,
+    expired: bool = False,
+    mode: str = "chatgpt",
+    refresh_token: str = "rt-1",
+) -> dict:
+    """An ``auth.json`` dict as the Codex CLI writes it."""
+    import time as _time
+
+    if mode == "apikey":
+        return {"auth_mode": "apikey", "OPENAI_API_KEY": "sk-test", "tokens": None,
+                "last_refresh": None}
+    exp = _time.time() - 60 if expired else _time.time() + 3600
+    return {
+        "auth_mode": "chatgpt",
+        "OPENAI_API_KEY": None,
+        "tokens": {
+            "id_token": make_id_token(email, account_id, plan),
+            "access_token": make_id_token(email, account_id, plan, exp=exp),
+            "refresh_token": refresh_token,
+            "account_id": account_id,
+        },
+        "last_refresh": "2026-09-14T00:00:00.000Z",
+    }
+
+
+def write_codex_auth(home: Path, auth: dict) -> Path:
+    codex_dir = home / ".codex"
+    codex_dir.mkdir(exist_ok=True)
+    path = codex_dir / "auth.json"
+    path.write_text(json.dumps(auth))
+    if sys.platform != "win32":
+        os.chmod(path, 0o600)
+    return path
+
+
+@pytest.fixture
+def codex_home(temp_home: Path) -> Path:
+    """``<temp_home>/.codex`` holding a ChatGPT login for me@example.com."""
+    write_codex_auth(temp_home, make_codex_auth())
+    return temp_home / ".codex"
+
+
+@pytest.fixture(autouse=True)
+def block_codex_network(request, monkeypatch):
+    """No test may reach OpenAI: every Codex HTTP call must be mocked.
+
+    ``@pytest.mark.no_codex_network_fake`` opts out for tests that mock
+    ``urlopen`` themselves.
+    """
+    if request.node.get_closest_marker("no_codex_network_fake"):
+        yield
+        return
+
+    def _refuse(*args, **kwargs):
+        raise AssertionError("unmocked Codex HTTP request")
+
+    monkeypatch.setattr("claude_swap.codex.auth.urllib.request.urlopen", _refuse)
+    yield
 
 
 @pytest.fixture
