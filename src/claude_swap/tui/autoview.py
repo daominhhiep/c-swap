@@ -24,7 +24,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Footer, RichLog, Static
 
-from claude_swap.autoswitch import (
+from claude_swap.claude.autoswitch import (
     AutoSwitchEngine,
     AutoSwitchEvent,
     binding_pct,

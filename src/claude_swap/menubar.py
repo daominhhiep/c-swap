@@ -1,7 +1,7 @@
 """macOS menu bar app for claude-swap (``ccswap --menubar``).
 
 A thin GUI shell over ``ClaudeAccountSwitcher`` and the core auto-switch engine
-(``claude_swap.autoswitch``) — it never re-implements account, usage, or
+(``claude_swap.claude.autoswitch``) — it never re-implements account, usage, or
 auto-switch logic. Usage for display comes from ``switcher.accounts_snapshot()``
 (backed by the shared usage store); auto-switching, when enabled, runs the same
 ``AutoSwitchEngine`` the CLI's ``ccswap auto`` drives, sharing
@@ -31,7 +31,7 @@ from pathlib import Path
 from claude_swap import pace
 from claude_swap.exceptions import ClaudeSwitchError, CredentialReadError
 from claude_swap.printer import warning
-from claude_swap.switcher import SENTINEL_NOTES
+from claude_swap.claude.switcher import SENTINEL_NOTES
 
 ICON = "⇄"
 REFRESH_CHOICES: tuple[int, ...] = (30, 60, 300)
@@ -547,7 +547,7 @@ def run(switcher) -> int:
         AppKit.NSApplicationActivationPolicyAccessory
     )
 
-    from claude_swap.autoswitch import AutoSwitchEngine
+    from claude_swap.claude.autoswitch import AutoSwitchEngine
     from claude_swap.settings import load_settings, set_setting
     from claude_swap.snapshot_source import SnapshotSource
 

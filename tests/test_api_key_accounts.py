@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pytest
 
-from claude_swap import macos_keychain
-from claude_swap import session as session_mod
-from claude_swap.credentials import (
+from claude_swap.claude import macos_keychain
+from claude_swap.claude import session as session_mod
+from claude_swap.claude.credentials import (
     CLAUDE_CODE_KEYCHAIN_SERVICE,
     CLAUDE_CODE_MANAGED_KEYCHAIN_SERVICE,
     approved_form,
@@ -35,9 +35,9 @@ from claude_swap.exceptions import (
 from claude_swap.json_output import USAGE_API_KEY, usage_fields
 from claude_swap.models import Platform
 from claude_swap.paths import get_credentials_path, get_global_config_path
-from claude_swap.session import SessionManager
-from claude_swap.switcher import ClaudeAccountSwitcher
-from claude_swap.transfer import export_accounts, import_accounts
+from claude_swap.claude.session import SessionManager
+from claude_swap.claude.switcher import ClaudeAccountSwitcher
+from claude_swap.claude.transfer import export_accounts, import_accounts
 
 API_KEY = "sk-ant-api03-" + "a1b2c3d4e5" * 4  # 53 chars
 OTHER_KEY = "sk-ant-api03-" + "z9y8x7w6v5" * 4
@@ -261,7 +261,7 @@ class TestStrategyBehaviour:
 
     def test_api_key_headroom_is_unknown(self):
         # None headroom == "unknown" == never auto-skipped by next-available.
-        from claude_swap import oauth
+        from claude_swap.claude import oauth
 
         assert oauth.account_headroom(USAGE_API_KEY) is None
 
@@ -825,7 +825,7 @@ class TestATornConfigSurvivesAnOrdinarySwitch:
         def no_space(*_a, **_kw):
             raise OSError(28, "No space left on device")
 
-        with patch("claude_swap.switcher.shutil.copy", side_effect=no_space):
+        with patch("claude_swap.claude.switcher.shutil.copy", side_effect=no_space):
             with pytest.raises(SwitchError):
                 s.switch_to("2", json_output=True)
 

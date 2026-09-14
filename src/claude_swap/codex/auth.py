@@ -31,7 +31,7 @@ from typing import Any
 
 from claude_swap import __version__
 from claude_swap.exceptions import ClaudeSwitchError
-from claude_swap.oauth import UsageOutcome, _classify_usage_error, format_reset
+from claude_swap.claude.oauth import UsageOutcome, _classify_usage_error, format_reset
 
 _logger = logging.getLogger("claude-swap")
 

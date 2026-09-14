@@ -67,7 +67,7 @@ import random
 from collections.abc import Callable
 from datetime import datetime
 
-from claude_swap import oauth
+from claude_swap.claude import oauth
 
 # Freshness floor shared by every collector: an entry younger than this is
 # served from the store without any fetch, so the maximum sustained rate on

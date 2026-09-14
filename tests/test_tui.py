@@ -19,10 +19,10 @@ from pathlib import Path
 
 import pytest
 
-from claude_swap.autoswitch import NoSwitchEvent, SwitchEvent
+from claude_swap.claude.autoswitch import NoSwitchEvent, SwitchEvent
 from claude_swap.json_output import USAGE_API_KEY, USAGE_TOKEN_EXPIRED
 from claude_swap.models import AccountSnapshot, AccountsSnapshot
-from claude_swap.switcher import ClaudeAccountSwitcher
+from claude_swap.claude.switcher import ClaudeAccountSwitcher
 from claude_swap.tui import data as tui_data
 from claude_swap.usage_store import UsageEntry
 
@@ -313,7 +313,7 @@ class TestFormatting:
             tui_data.sentinel_label(USAGE_TOKEN_EXPIRED)
             == "token expired — refresh deferred this pass; retries automatically"
         )
-        from claude_swap.switcher import SENTINEL_NOTES
+        from claude_swap.claude.switcher import SENTINEL_NOTES
 
         for sentinel, note in SENTINEL_NOTES.items():
             assert tui_data.sentinel_label(sentinel) == note

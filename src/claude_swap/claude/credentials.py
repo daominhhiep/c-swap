@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 from typing import NamedTuple, Protocol
 
-from claude_swap import macos_keychain
+from claude_swap.claude import macos_keychain
 from claude_swap.exceptions import (
     CredentialError,
     CredentialReadError,
@@ -89,7 +89,7 @@ def _active_oauth_keychain_services() -> list[str]:
     """
     # Local import: session imports from this module, so a top-level import
     # would close the cycle. _read_capture_credentials does the same.
-    from claude_swap.session import keychain_service_name
+    from claude_swap.claude.session import keychain_service_name
 
     secure_env = os.environ.get("CLAUDE_SECURESTORAGE_CONFIG_DIR")
     if secure_env is not None:

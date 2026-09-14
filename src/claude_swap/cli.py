@@ -20,7 +20,7 @@ from claude_swap.printer import (
     warning,
 )
 from claude_swap.settings import load_ui_settings
-from claude_swap.switcher import ClaudeAccountSwitcher
+from claude_swap.claude.switcher import ClaudeAccountSwitcher
 from claude_swap.codex.switcher import CodexAccountSwitcher
 
 
@@ -190,7 +190,7 @@ Examples:
         switcher = ClaudeAccountSwitcher(debug=args.debug)
         _guard_root(switcher)
 
-        from claude_swap.session import SessionManager
+        from claude_swap.claude.session import SessionManager
 
         manager = SessionManager(switcher)
 
@@ -290,7 +290,7 @@ Examples:
             switcher.list_mappings()
             return
 
-        from claude_swap.mappings import MappingStore, normalize_path
+        from claude_swap.claude.mappings import MappingStore, normalize_path
 
         store = MappingStore(switcher.backup_dir)
         account_num, email, org_uuid = switcher.resolve_account(args.account)
@@ -336,7 +336,7 @@ def _unmap_command(argv: list[str]) -> None:
         switcher = ClaudeAccountSwitcher(debug=args.debug)
         _guard_root(switcher)
 
-        from claude_swap.mappings import MappingStore, normalize_path
+        from claude_swap.claude.mappings import MappingStore, normalize_path
 
         store = MappingStore(switcher.backup_dir)
         target = args.path or os.getcwd()
@@ -702,7 +702,7 @@ Defaults live in settings.json in the backup root; flags override them.
     )
     args = parser.parse_args(argv)
 
-    from claude_swap.autoswitch import AutoSwitchEngine, AutoSwitchEvent
+    from claude_swap.claude.autoswitch import AutoSwitchEngine, AutoSwitchEvent
     from claude_swap.printer import accent, yellowed
     from claude_swap.settings import load_settings, merged_with_cli
 
@@ -1558,11 +1558,11 @@ The original flag spellings (%(prog)s --switch, %(prog)s --list, ...) keep worki
         elif args.purge:
             switcher.purge()
         elif args.export:
-            from claude_swap.transfer import export_accounts
+            from claude_swap.claude.transfer import export_accounts
 
             export_accounts(switcher, args.export, account=args.account, full=args.full)
         elif args.import_:
-            from claude_swap.transfer import import_accounts
+            from claude_swap.claude.transfer import import_accounts
 
             import_accounts(switcher, args.import_, force=args.force)
         elif args.tui:

@@ -1,4 +1,4 @@
-"""Tests for session mode (claude_swap.session + the switcher guards)."""
+"""Tests for session mode (claude_swap.claude.session + the switcher guards)."""
 
 from __future__ import annotations
 
@@ -13,10 +13,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from claude_swap import macos_keychain
-from claude_swap import oauth
-from claude_swap import session as session_mod
-from claude_swap.credentials import CLAUDE_CODE_MANAGED_KEYCHAIN_SERVICE
+from claude_swap.claude import macos_keychain
+from claude_swap.claude import oauth
+from claude_swap.claude import session as session_mod
+from claude_swap.claude.credentials import CLAUDE_CODE_MANAGED_KEYCHAIN_SERVICE
 from claude_swap.exceptions import (
     AccountNotFoundError,
     CredentialReadError,
@@ -26,7 +26,7 @@ from claude_swap.exceptions import (
 )
 from claude_swap.models import Platform
 from claude_swap.paths import get_global_config_path
-from claude_swap.session import (
+from claude_swap.claude.session import (
     MCP_DISPLACED_STASH,
     MCP_MIRROR_MARKER,
     SHARE_MANIFEST,
@@ -41,7 +41,7 @@ from claude_swap.session import (
     slugify_email,
     stale_marker_for,
 )
-from claude_swap.switcher import ClaudeAccountSwitcher
+from claude_swap.claude.switcher import ClaudeAccountSwitcher
 
 ACCOUNT_EMAIL = "account2@example.com"
 ACCOUNT_NUM = "2"
@@ -161,12 +161,12 @@ def refresh_rotates(monkeypatch):
     calls: list[str] = []
 
     def fake_gate(self, account_num: str, email: str, snapshot: str):
-        from claude_swap import oauth as oauth_mod
+        from claude_swap.claude import oauth as oauth_mod
         calls.append(snapshot)
         self._write_account_credentials(account_num, email, ROTATED_CREDS)
         return oauth_mod.RefreshOutcome(ROTATED_CREDS, None)
 
-    from claude_swap.switcher import ClaudeAccountSwitcher
+    from claude_swap.claude.switcher import ClaudeAccountSwitcher
     monkeypatch.setattr(
         ClaudeAccountSwitcher, "consume_backup_grant", fake_gate
     )
@@ -1227,7 +1227,7 @@ class TestMcpMirror:
         assert elsewhere.read_bytes() == before
 
     def test_held_lock_fails_open(self, mcp_setup, monkeypatch):
-        from claude_swap import claude_locks
+        from claude_swap.claude import claude_locks
 
         monkeypatch.setattr(claude_locks, "DEFAULT_TIMEOUT_S", 0.3)
         default_config, session_dir, mgr = mcp_setup
@@ -1816,7 +1816,7 @@ class TestGuards:
             return oauth.UsageOutcome(None)
 
         monkeypatch.setattr(
-            "claude_swap.oauth.try_fetch_usage_for_account", fake_fetch
+            "claude_swap.claude.oauth.try_fetch_usage_for_account", fake_fetch
         )
         seeded_switcher.list_accounts()
 
@@ -2550,8 +2550,8 @@ class TestBootstrapRefreshRoutesThroughGate:
     the switcher's consume gate, not a direct POST of its own read."""
 
     def test_bootstrap_uses_gate(self, temp_home, monkeypatch):
-        from claude_swap import oauth as oauth_mod
-        from claude_swap.switcher import ClaudeAccountSwitcher
+        from claude_swap.claude import oauth as oauth_mod
+        from claude_swap.claude.switcher import ClaudeAccountSwitcher
         s = ClaudeAccountSwitcher()
         s._setup_directories()
         s._init_sequence_file()
@@ -2592,12 +2592,12 @@ class TestBootstrapRefreshRoutesThroughGate:
         # The bypass seam: session.py no longer imports any direct refresh
         # helper, so a regression would have to call oauth's POST directly.
         monkeypatch.setattr(
-            "claude_swap.oauth.try_refresh_oauth_credentials", direct_post
+            "claude_swap.claude.oauth.try_refresh_oauth_credentials", direct_post
         )
         monkeypatch.setattr(
-            "claude_swap.oauth.refresh_oauth_credentials", direct_post
+            "claude_swap.claude.oauth.refresh_oauth_credentials", direct_post
         )
-        from claude_swap.session import SessionManager
+        from claude_swap.claude.session import SessionManager
         mgr = SessionManager(s)
         # setup_session is the seam: it must call the gate BEFORE the
         # bootstrap lock (the gate takes the same non-reentrant FileLock).

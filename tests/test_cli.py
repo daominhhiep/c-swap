@@ -13,8 +13,8 @@ import pytest
 
 from claude_swap import __version__
 from claude_swap import cli
-from claude_swap.credentials import ActiveCredentials
-from claude_swap.switcher import ClaudeAccountSwitcher
+from claude_swap.claude.credentials import ActiveCredentials
+from claude_swap.claude.switcher import ClaudeAccountSwitcher
 
 # src layout: ensure subprocess can find claude_swap
 _SRC_DIR = str(Path(__file__).resolve().parent.parent / "src")
@@ -357,7 +357,7 @@ class TestCLI:
     def test_export_dispatch_calls_transfer(self):
         """--export dispatches into transfer.export_accounts."""
         with patch("claude_swap.cli.ClaudeAccountSwitcher") as switcher_cls, \
-             patch("claude_swap.transfer.export_accounts") as export_fn, \
+             patch("claude_swap.claude.transfer.export_accounts") as export_fn, \
              patch.object(
                  sys, "argv", ["claude-swap", "--export", "/tmp/x", "--account", "2"]
              ), \
@@ -379,7 +379,7 @@ class TestCLI:
     def test_full_flag_dispatches_with_full_true(self):
         """--export --full should pass full=True into export_accounts."""
         with patch("claude_swap.cli.ClaudeAccountSwitcher") as switcher_cls, \
-             patch("claude_swap.transfer.export_accounts") as export_fn, \
+             patch("claude_swap.claude.transfer.export_accounts") as export_fn, \
              patch.object(
                  sys, "argv", ["claude-swap", "--export", "/tmp/x", "--full"]
              ), \
@@ -393,7 +393,7 @@ class TestCLI:
     def test_import_dispatch_calls_transfer(self):
         """--import dispatches into transfer.import_accounts."""
         with patch("claude_swap.cli.ClaudeAccountSwitcher") as switcher_cls, \
-             patch("claude_swap.transfer.import_accounts") as import_fn, \
+             patch("claude_swap.claude.transfer.import_accounts") as import_fn, \
              patch.object(
                  sys, "argv", ["claude-swap", "--import", "/tmp/x", "--force"]
              ), \
@@ -660,7 +660,7 @@ class TestCLICommands:
 
     def test_add_token_without_email_dispatches_with_none(self, temp_home: Path, capsys):
         """--add-token without --email should dispatch with email=None (defaulted by switcher)."""
-        from claude_swap.switcher import ClaudeAccountSwitcher
+        from claude_swap.claude.switcher import ClaudeAccountSwitcher
 
         with patch.object(
             sys, "argv", ["claude-swap", "--add-token", "sk-ant-oat01-abc"],
@@ -683,7 +683,7 @@ class TestCLICommands:
 
     def test_add_token_dispatches_to_switcher(self, temp_home: Path, capsys):
         """--add-token with --email should call add_account_from_token."""
-        from claude_swap.switcher import ClaudeAccountSwitcher
+        from claude_swap.claude.switcher import ClaudeAccountSwitcher
 
         with patch.object(
             sys, "argv",
@@ -699,7 +699,7 @@ class TestCLICommands:
 
     def test_add_token_with_slot(self, temp_home: Path, capsys):
         """--add-token --slot should forward slot to add_account_from_token."""
-        from claude_swap.switcher import ClaudeAccountSwitcher
+        from claude_swap.claude.switcher import ClaudeAccountSwitcher
 
         with patch.object(
             sys, "argv",
@@ -749,7 +749,7 @@ class TestRunCommand:
                     require_session,
                 ))
 
-        with patch("claude_swap.session.SessionManager", FakeSessionManager), \
+        with patch("claude_swap.claude.session.SessionManager", FakeSessionManager), \
              patch("claude_swap.cli.ClaudeAccountSwitcher"), \
              patch("os.geteuid", return_value=1000, create=True), \
              patch.object(sys, "argv", ["claude-swap", *argv]):
@@ -839,7 +839,7 @@ class TestRunCommand:
 
                 raise SessionError("boom")
 
-        with patch("claude_swap.session.SessionManager", FailingSessionManager), \
+        with patch("claude_swap.claude.session.SessionManager", FailingSessionManager), \
              patch("claude_swap.cli.ClaudeAccountSwitcher"), \
              patch("os.geteuid", return_value=1000, create=True), \
              patch.object(sys, "argv", ["claude-swap", "run", "2"]):
@@ -946,7 +946,7 @@ class TestSubcommandAliases:
             ):
                 calls.append((identifier, claude_args, share))
 
-        with patch("claude_swap.session.SessionManager", FakeSessionManager), \
+        with patch("claude_swap.claude.session.SessionManager", FakeSessionManager), \
              patch("claude_swap.cli.ClaudeAccountSwitcher"), \
              patch("os.geteuid", return_value=1000, create=True), \
              patch.object(sys, "argv", ["claude-swap", "run", "2"]):
@@ -1067,7 +1067,7 @@ class TestAutoCommand:
             type(self).instances.append(self)
 
         def tick(self):
-            from claude_swap.autoswitch import TickOutcome
+            from claude_swap.claude.autoswitch import TickOutcome
 
             return type(self).tick_outcome or TickOutcome.NO_ACTION
 
@@ -1083,7 +1083,7 @@ class TestAutoCommand:
         self.FakeEngine.tick_outcome = None
 
     def _run(self, argv: list[str], temp_home):
-        with patch("claude_swap.autoswitch.AutoSwitchEngine", self.FakeEngine), \
+        with patch("claude_swap.claude.autoswitch.AutoSwitchEngine", self.FakeEngine), \
              patch("os.geteuid", return_value=1000, create=True), \
              patch.object(sys, "argv", ["claude-swap", "auto", *argv]):
             with pytest.raises(SystemExit) as excinfo:
@@ -1091,19 +1091,19 @@ class TestAutoCommand:
         return excinfo.value.code
 
     def test_once_exit_code_switched(self, temp_home):
-        from claude_swap.autoswitch import TickOutcome
+        from claude_swap.claude.autoswitch import TickOutcome
 
         self.FakeEngine.tick_outcome = TickOutcome.SWITCHED
         assert self._run(["--once"], temp_home) == 0
 
     def test_once_exit_code_no_action(self, temp_home):
-        from claude_swap.autoswitch import TickOutcome
+        from claude_swap.claude.autoswitch import TickOutcome
 
         self.FakeEngine.tick_outcome = TickOutcome.NO_ACTION
         assert self._run(["--once"], temp_home) == 2
 
     def test_once_exit_code_blocked(self, temp_home):
-        from claude_swap.autoswitch import TickOutcome
+        from claude_swap.claude.autoswitch import TickOutcome
 
         self.FakeEngine.tick_outcome = TickOutcome.BLOCKED
         assert self._run(["--once"], temp_home) == 3
@@ -1131,7 +1131,7 @@ class TestAutoCommand:
         assert self.FakeEngine.instances[-1].dry_run is True
 
     def test_json_stdout_is_pure_jsonl(self, temp_home, capsys):
-        from claude_swap.autoswitch import NoSwitchEvent, TickOutcome
+        from claude_swap.claude.autoswitch import NoSwitchEvent, TickOutcome
 
         class EmittingEngine(self.FakeEngine):
             def tick(self):
@@ -1139,7 +1139,7 @@ class TestAutoCommand:
                 self.on_event(NoSwitchEvent(reason="cooldown"))
                 return TickOutcome.NO_ACTION
 
-        with patch("claude_swap.autoswitch.AutoSwitchEngine", EmittingEngine), \
+        with patch("claude_swap.claude.autoswitch.AutoSwitchEngine", EmittingEngine), \
              patch("os.geteuid", return_value=1000, create=True), \
              patch.object(sys, "argv", ["claude-swap", "auto", "--once", "--json"]):
             with pytest.raises(SystemExit):
@@ -1258,7 +1258,7 @@ class TestMapCommand:
         return switcher
 
     def test_map_account_to_path(self, temp_home, capsys):
-        from claude_swap.mappings import MappingStore
+        from claude_swap.claude.mappings import MappingStore
         self._seeded_switcher_env(temp_home)
         target = temp_home / "proj"
         target.mkdir()
@@ -1273,7 +1273,7 @@ class TestMapCommand:
         assert "Mapped" in capsys.readouterr().out
 
     def test_map_nonexistent_path_warns_but_maps(self, temp_home, capsys):
-        from claude_swap.mappings import MappingStore
+        from claude_swap.claude.mappings import MappingStore
         self._seeded_switcher_env(temp_home)
         target = temp_home / "not-created-yet"
 
@@ -1284,7 +1284,7 @@ class TestMapCommand:
         assert "is not an existing directory" in capsys.readouterr().out
 
     def test_map_by_email_defaults_to_cwd(self, temp_home, monkeypatch, capsys):
-        from claude_swap.mappings import MappingStore
+        from claude_swap.claude.mappings import MappingStore
         self._seeded_switcher_env(temp_home)
         cwd = temp_home / "here"
         cwd.mkdir()
@@ -1311,7 +1311,7 @@ class TestMapCommand:
         assert "No directory mappings yet" in capsys.readouterr().out
 
     def test_map_list_shows_entries(self, temp_home, capsys):
-        from claude_swap.mappings import MappingStore
+        from claude_swap.claude.mappings import MappingStore
         switcher = self._seeded_switcher_env(temp_home)
         target = temp_home / "proj"
         target.mkdir()
@@ -1326,7 +1326,7 @@ class TestMapCommand:
         assert "2:" in out  # slot number resolved
 
     def test_map_list_flags_removed_account(self, temp_home, capsys):
-        from claude_swap.mappings import MappingStore
+        from claude_swap.claude.mappings import MappingStore
         switcher = self._seeded_switcher_env(temp_home)
         target = temp_home / "proj"
         target.mkdir()
@@ -1339,7 +1339,7 @@ class TestMapCommand:
         assert "account removed" in capsys.readouterr().out
 
     def test_unmap_removes(self, temp_home, capsys):
-        from claude_swap.mappings import MappingStore
+        from claude_swap.claude.mappings import MappingStore
         switcher = self._seeded_switcher_env(temp_home)
         target = temp_home / "proj"
         target.mkdir()
@@ -1560,7 +1560,7 @@ class TestRunAutoResolve:
         return sw
 
     def test_mapped_dir_runs_resolved_account(self, tmp_path, monkeypatch):
-        from claude_swap.mappings import MappingStore
+        from claude_swap.claude.mappings import MappingStore
 
         repo = tmp_path / "work" / "client-app"
         repo.mkdir(parents=True)
@@ -1579,7 +1579,7 @@ class TestRunAutoResolve:
         }
         calls = []
         monkeypatch.chdir(repo)
-        with patch("claude_swap.session.SessionManager", self._fake_manager(calls)), \
+        with patch("claude_swap.claude.session.SessionManager", self._fake_manager(calls)), \
              patch("claude_swap.cli.ClaudeAccountSwitcher",
                    return_value=self._fake_switcher(backup, seq)), \
              patch("os.geteuid", return_value=1000, create=True), \
@@ -1588,7 +1588,7 @@ class TestRunAutoResolve:
         assert ("run", "2", [], True, False) in calls
 
     def test_mapped_subdir_inherits(self, tmp_path, monkeypatch):
-        from claude_swap.mappings import MappingStore
+        from claude_swap.claude.mappings import MappingStore
 
         repo = tmp_path / "work"
         sub = repo / "client" / "src"
@@ -1603,7 +1603,7 @@ class TestRunAutoResolve:
         }
         calls = []
         monkeypatch.chdir(sub)
-        with patch("claude_swap.session.SessionManager", self._fake_manager(calls)), \
+        with patch("claude_swap.claude.session.SessionManager", self._fake_manager(calls)), \
              patch("claude_swap.cli.ClaudeAccountSwitcher",
                    return_value=self._fake_switcher(backup, seq)), \
              patch("os.geteuid", return_value=1000, create=True), \
@@ -1618,7 +1618,7 @@ class TestRunAutoResolve:
         scratch.mkdir()
         calls = []
         monkeypatch.chdir(scratch)
-        with patch("claude_swap.session.SessionManager", self._fake_manager(calls)), \
+        with patch("claude_swap.claude.session.SessionManager", self._fake_manager(calls)), \
              patch("claude_swap.cli.ClaudeAccountSwitcher",
                    return_value=self._fake_switcher(backup, {"accounts": {}, "sequence": []})), \
              patch("os.geteuid", return_value=1000, create=True), \
@@ -1628,7 +1628,7 @@ class TestRunAutoResolve:
         assert "No account mapped" in capsys.readouterr().out
 
     def test_removed_account_falls_back_with_warning(self, tmp_path, monkeypatch, capsys):
-        from claude_swap.mappings import MappingStore
+        from claude_swap.claude.mappings import MappingStore
 
         repo = tmp_path / "repo"
         repo.mkdir()
@@ -1637,7 +1637,7 @@ class TestRunAutoResolve:
         MappingStore(backup).set(repo, "ghost@co.com", "")
         calls = []
         monkeypatch.chdir(repo)
-        with patch("claude_swap.session.SessionManager", self._fake_manager(calls)), \
+        with patch("claude_swap.claude.session.SessionManager", self._fake_manager(calls)), \
              patch("claude_swap.cli.ClaudeAccountSwitcher",
                    return_value=self._fake_switcher(backup, {"accounts": {}, "sequence": []})), \
              patch("os.geteuid", return_value=1000, create=True), \
@@ -1652,7 +1652,7 @@ class TestRunAutoResolve:
         backup.mkdir()
         calls = []
         monkeypatch.chdir(tmp_path)
-        with patch("claude_swap.session.SessionManager", self._fake_manager(calls)), \
+        with patch("claude_swap.claude.session.SessionManager", self._fake_manager(calls)), \
              patch("claude_swap.cli.ClaudeAccountSwitcher",
                    return_value=self._fake_switcher(backup, {"accounts": {}, "sequence": []})), \
              patch("os.geteuid", return_value=1000, create=True), \
@@ -1661,7 +1661,7 @@ class TestRunAutoResolve:
         assert ("run", "3", [], True, False) in calls
 
     def test_no_account_forwards_tail(self, tmp_path, monkeypatch):
-        from claude_swap.mappings import MappingStore
+        from claude_swap.claude.mappings import MappingStore
 
         repo = tmp_path / "repo"
         repo.mkdir()
@@ -1675,7 +1675,7 @@ class TestRunAutoResolve:
         }
         calls = []
         monkeypatch.chdir(repo)
-        with patch("claude_swap.session.SessionManager", self._fake_manager(calls)), \
+        with patch("claude_swap.claude.session.SessionManager", self._fake_manager(calls)), \
              patch("claude_swap.cli.ClaudeAccountSwitcher",
                    return_value=self._fake_switcher(backup, seq)), \
              patch("os.geteuid", return_value=1000, create=True), \
@@ -1685,7 +1685,7 @@ class TestRunAutoResolve:
 
     def test_no_account_forwards_share_history(self, tmp_path, monkeypatch):
         """--share-history survives the mapped-account resolution path."""
-        from claude_swap.mappings import MappingStore
+        from claude_swap.claude.mappings import MappingStore
 
         repo = tmp_path / "repo"
         repo.mkdir()
@@ -1699,7 +1699,7 @@ class TestRunAutoResolve:
         }
         calls = []
         monkeypatch.chdir(repo)
-        with patch("claude_swap.session.SessionManager", self._fake_manager(calls)), \
+        with patch("claude_swap.claude.session.SessionManager", self._fake_manager(calls)), \
              patch("claude_swap.cli.ClaudeAccountSwitcher",
                    return_value=self._fake_switcher(backup, seq)), \
              patch("os.geteuid", return_value=1000, create=True), \

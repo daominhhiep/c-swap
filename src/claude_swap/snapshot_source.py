@@ -20,7 +20,7 @@ from dataclasses import replace
 
 from claude_swap.json_output import USAGE_TOKEN_EXPIRED
 from claude_swap.models import AccountSnapshot, AccountsSnapshot
-from claude_swap.switcher import ClaudeAccountSwitcher
+from claude_swap.claude.switcher import ClaudeAccountSwitcher
 from claude_swap.usage_store import UsageEntry
 
 

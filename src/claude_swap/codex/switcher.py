@@ -49,7 +49,7 @@ from claude_swap.printer import (
     muted,
     warning,
 )
-from claude_swap.switcher import (
+from claude_swap.claude.switcher import (
     _FETCH_STAGGER_S,
     SENTINEL_NOTES,
     _usage_entry_lines,

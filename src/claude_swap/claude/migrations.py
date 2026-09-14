@@ -1,7 +1,7 @@
 """One-time, run-once data migrations for claude-swap.
 
 A small, boring home for compatibility migrations so they don't pollute the
-core switch/read/write flow in :mod:`claude_swap.switcher`. Each migration:
+core switch/read/write flow in :mod:`claude_swap.claude.switcher`. Each migration:
 
 - is **idempotent** and **self-guarded** (safe to run twice, safe even if the
   state file is missing or corrupt),
@@ -31,14 +31,14 @@ from collections import Counter
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
-from claude_swap import macos_keychain
+from claude_swap.claude import macos_keychain
 from claude_swap.exceptions import MigrationIncomplete
 from claude_swap.fsutil import replace_with_retry
 from claude_swap.models import Platform, get_timestamp
-from claude_swap.switcher import KEYRING_SERVICE, SECURITY_SERVICE
+from claude_swap.claude.switcher import KEYRING_SERVICE, SECURITY_SERVICE
 
 if TYPE_CHECKING:
-    from claude_swap.switcher import ClaudeAccountSwitcher
+    from claude_swap.claude.switcher import ClaudeAccountSwitcher
 
 STATE_FILENAME = ".migrations.json"
 STATE_VERSION = 1
@@ -294,7 +294,7 @@ def migrate_macos_keyring_to_security(switcher: "ClaudeAccountSwitcher") -> bool
 
     macOS now stores per-account backup credentials in the Keychain via the
     ``security`` CLI under ``SECURITY_SERVICE`` (see
-    :mod:`claude_swap.macos_keychain`) instead of the third-party ``keyring``
+    :mod:`claude_swap.claude.macos_keychain`) instead of the third-party ``keyring``
     library's ``KEYRING_SERVICE``. Source and dest are *different* services, so old
     keyring items and new security items coexist during a safe
     write → verify → delete (no risk window), like the Windows keyring → files

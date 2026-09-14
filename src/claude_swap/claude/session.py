@@ -48,8 +48,8 @@ import unicodedata
 from pathlib import Path
 from typing import TYPE_CHECKING, NoReturn
 
-from claude_swap import macos_keychain
-from claude_swap.claude_locks import proper_lockfile
+from claude_swap.claude import macos_keychain
+from claude_swap.claude.claude_locks import proper_lockfile
 from claude_swap.exceptions import (
     ClaudeCodeLockTimeout,
     CredentialReadError,
@@ -60,11 +60,11 @@ from claude_swap.locking import FileLock
 from claude_swap.models import Platform
 from claude_swap.paths import get_default_global_config_path
 from claude_swap.printer import accent, dimmed, muted, warning
-from claude_swap.process_detection import ClaudeSession, scan_sessions
+from claude_swap.claude.process_detection import ClaudeSession, scan_sessions
 from claude_swap.settings import atomic_write_json
 
 if TYPE_CHECKING:
-    from claude_swap.switcher import ClaudeAccountSwitcher
+    from claude_swap.claude.switcher import ClaudeAccountSwitcher
 
 # Items mirrored from ~/.claude into session profiles when sharing is on.
 # Deliberately excludes anything account- or instance-scoped: plugins/,
@@ -847,7 +847,7 @@ class SessionManager:
         evidence of a mismatch, and re-bootstrapping on one would throw away a
         working profile over a read error.
         """
-        from claude_swap import oauth as _oauth
+        from claude_swap.claude import oauth as _oauth
 
         profile = read_session_credentials(session_dir)
         backup = self.switcher.read_account_credentials(account_num, email)

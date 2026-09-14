@@ -14,7 +14,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from claude_swap import macos_keychain
+from claude_swap.claude import macos_keychain
 
 from claude_swap.exceptions import (
     AccountNotFoundError,
@@ -25,8 +25,9 @@ from claude_swap.exceptions import (
     SwitchError,
     ValidationError,
 )
-from claude_swap import oauth, pace
-from claude_swap.claude_locks import claude_config_lock, claude_credentials_lock
+from claude_swap import pace
+from claude_swap.claude import oauth
+from claude_swap.claude.claude_locks import claude_config_lock, claude_credentials_lock
 from claude_swap.json_output import (
     SCHEMA_VERSION,
     USAGE_API_KEY,
@@ -42,7 +43,7 @@ from claude_swap.json_output import (
     usage_fields,
     usage_freshness_fields,
 )
-from claude_swap.credentials import (  # noqa: F401  (constants re-exported for migrations/tests)
+from claude_swap.claude.credentials import (  # noqa: F401  (constants re-exported for migrations/tests)
     CLAUDE_CODE_KEYCHAIN_SERVICE,
     SECURITY_SERVICE,
     ActiveCredentials,
@@ -83,7 +84,7 @@ from claude_swap.paths import (
     get_legacy_backup_root,
     migrate_legacy_backup_dir,
 )
-from claude_swap.process_detection import get_running_instances
+from claude_swap.claude.process_detection import get_running_instances
 from claude_swap import poll_policy
 from claude_swap.settings import load_settings, parse_model_names, settings_path
 from claude_swap.usage_store import (
@@ -382,7 +383,7 @@ class ClaudeAccountSwitcher:
         # backup credentials out of Credential Manager into files). Imported
         # lazily to avoid a circular import, and self-contained so it never
         # aborts construction. No-op on fresh installs / once recorded.
-        from claude_swap.migrations import run_migrations
+        from claude_swap.claude.migrations import run_migrations
 
         run_migrations(self)
 
@@ -693,7 +694,7 @@ class ClaudeAccountSwitcher:
         Read-only. ccswap does not write claude's hashed keychain entry — see
         the ``session`` module docstring for why.
         """
-        from claude_swap.session import read_config_dir_credentials
+        from claude_swap.claude.session import read_config_dir_credentials
 
         secure_env = os.environ.get("CLAUDE_SECURESTORAGE_CONFIG_DIR")
         config_dir = os.environ.get("CLAUDE_CONFIG_DIR")
@@ -795,7 +796,7 @@ class ClaudeAccountSwitcher:
         re-bootstraps it once it is no longer live.
         """
         if self._live_session_pids(account_num, email):
-            from claude_swap.session import mark_session_stale
+            from claude_swap.claude.session import mark_session_stale
 
             if not mark_session_stale(self._session_dir(account_num, email)):
                 self._logger.error(
@@ -848,7 +849,7 @@ class ClaudeAccountSwitcher:
         try:
             self._post_backup_write(account_num, email)
         except OSError:
-            from claude_swap.session import mark_session_stale
+            from claude_swap.claude.session import mark_session_stale
 
             if mark_session_stale(self._session_dir(account_num, email)):
                 self._logger.warning(
@@ -902,7 +903,7 @@ class ClaudeAccountSwitcher:
         *migration* and --import --force keep the (email, org) identity that
         mappings are keyed by, so they need no pruning.
         """
-        from claude_swap.mappings import MappingStore
+        from claude_swap.claude.mappings import MappingStore
 
         pruned = MappingStore(self.backup_dir).prune_account(email, org_uuid or "")
         if pruned:
@@ -942,7 +943,7 @@ class ClaudeAccountSwitcher:
         if sys.platform != "win32":
             os.chmod(config_file, 0o600)
 
-    # -- public accessors for session mode (claude_swap.session) ---------
+    # -- public accessors for session mode (claude_swap.claude.session) ---------
 
     def resolve_account(self, identifier: str) -> tuple[str, str, str]:
         """Resolve NUM|EMAIL to (account_num, email, organizationUuid).
@@ -1649,7 +1650,7 @@ class ClaudeAccountSwitcher:
         directory, (None, email) when a mapping exists but its account was
         removed, and (slot, email) when the mapping resolves.
         """
-        from claude_swap.mappings import MappingStore
+        from claude_swap.claude.mappings import MappingStore
 
         match = MappingStore(self.backup_dir).resolve(directory)
         if match is None:
@@ -1664,7 +1665,7 @@ class ClaudeAccountSwitcher:
 
     def list_mappings(self) -> None:
         """Print all directory → account mappings (for `ccswap map`)."""
-        from claude_swap.mappings import MappingStore
+        from claude_swap.claude.mappings import MappingStore
 
         mappings = MappingStore(self.backup_dir).all()
         if not mappings:
@@ -2098,7 +2099,7 @@ class ClaudeAccountSwitcher:
         self, account_num: str, email: str, snapshot: str
     ) -> "oauth.RefreshOutcome":
         """Body of ``consume_backup_grant``; caller holds the consume lock."""
-        from claude_swap.session import (
+        from claude_swap.claude.session import (
             is_session_stale,
             read_session_credentials,
             session_dir_for,
@@ -2630,7 +2631,7 @@ class ClaudeAccountSwitcher:
 
     def _active_verdict(self):
         """This thread's active-read verdict; a clean one if it never read."""
-        from claude_swap.credentials import ActiveCredentials
+        from claude_swap.claude.credentials import ActiveCredentials
 
         return getattr(self._active_verdict_tls, "value", None) or ActiveCredentials(
             "", False, False
@@ -2678,7 +2679,7 @@ class ClaudeAccountSwitcher:
     # -- session profile lifecycle ----------------------------------------
 
     def _session_dir(self, account_num: str, email: str) -> Path:
-        from claude_swap.session import session_dir_for
+        from claude_swap.claude.session import session_dir_for
 
         return session_dir_for(self.backup_dir, account_num, email)
 
@@ -2693,7 +2694,7 @@ class ClaudeAccountSwitcher:
             line = _label_token_status("active profile", creds)
             return [line] if line is not None else []
 
-        from claude_swap.session import (
+        from claude_swap.claude.session import (
             read_session_credentials,
             session_identity_drifted,
         )
@@ -2720,7 +2721,7 @@ class ClaudeAccountSwitcher:
         usage heuristics that read this; a destructive guard must use
         ``_ensure_no_live_session``, which asks the readability question too.
         """
-        from claude_swap.session import scan_live_sessions
+        from claude_swap.claude.session import scan_live_sessions
 
         sessions, _ = scan_live_sessions(self._session_dir(account_num, email))
         return [s.pid for s in sessions]
@@ -2733,7 +2734,7 @@ class ClaudeAccountSwitcher:
         ``.credentials.json`` overwritten) and slot removal, so treating an
         unreadable record as an absent one runs them under a live instance.
         """
-        from claude_swap.session import scan_live_sessions
+        from claude_swap.claude.session import scan_live_sessions
 
         pids = self._live_session_pids(account_num, email)
         if pids:
@@ -2761,7 +2762,7 @@ class ClaudeAccountSwitcher:
         projects/history survive. Used when backup credentials change under
         an existing profile (e.g. --import --force).
         """
-        from claude_swap.session import (
+        from claude_swap.claude.session import (
             clear_session_stale,
             delete_macos_keychain_entry,
         )
@@ -2798,7 +2799,7 @@ class ClaudeAccountSwitcher:
         re-bootstraps); and anything unreadable, because a read error is not
         evidence of drift.
         """
-        from claude_swap.session import (
+        from claude_swap.claude.session import (
             is_session_stale,
             read_session_credentials,
             session_identity_drifted,
@@ -2849,7 +2850,7 @@ class ClaudeAccountSwitcher:
         captured, and the two now hold the same generation. Returns whether
         the backup was advanced.
         """
-        from claude_swap.session import profile_is_quiescent
+        from claude_swap.claude.session import profile_is_quiescent
 
         session_dir = self._session_dir(account_num, email)
         with FileLock(self.lock_file):
@@ -2875,7 +2876,7 @@ class ClaudeAccountSwitcher:
         it: clear it explicitly, or the next profile created for this same
         slot+email inherits a re-bootstrap flag nothing set for it.
         """
-        from claude_swap.session import (
+        from claude_swap.claude.session import (
             clear_session_stale,
             delete_macos_keychain_entry,
         )
@@ -4820,7 +4821,7 @@ class ClaudeAccountSwitcher:
         if is_active:
             return self._fetch_active_usage(str(num), email, creds, org_uuid)
 
-        from claude_swap.session import (
+        from claude_swap.claude.session import (
             read_session_credentials,
             session_identity_drifted,
         )
@@ -6705,7 +6706,7 @@ class ClaudeAccountSwitcher:
         The post-switch display runs after the lock releases so that persist
         callbacks inside list_accounts() can re-acquire it.
         """
-        from claude_swap.session import scan_live_sessions
+        from claude_swap.claude.session import scan_live_sessions
 
         self._refuse_session_shell()
         warnings_out: list[str] = []
@@ -7302,7 +7303,7 @@ class ClaudeAccountSwitcher:
             if sessions_root.is_dir()
             else []
         )
-        from claude_swap.session import scan_live_sessions
+        from claude_swap.claude.session import scan_live_sessions
 
         live = {}
         unreadable = {}
@@ -7394,7 +7395,7 @@ class ClaudeAccountSwitcher:
         # the hashed service names are derived from the dir paths and can't
         # be recomputed once the directories are deleted.
         if session_dirs:
-            from claude_swap.session import delete_macos_keychain_entry
+            from claude_swap.claude.session import delete_macos_keychain_entry
 
             for d in session_dirs:
                 delete_macos_keychain_entry(d)

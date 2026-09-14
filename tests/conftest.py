@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 import pytest
 
-from claude_swap import macos_keychain as _macos_keychain
+from claude_swap.claude import macos_keychain as _macos_keychain
 from claude_swap.codex import paths as _codex_paths
 from claude_swap import paths as _paths
 
@@ -536,7 +536,7 @@ def _isolate_real_home(request, tmp_path_factory, monkeypatch):
 def block_real_keychain(request, monkeypatch):
     """Safety net: no test may touch the real macOS Keychain.
 
-    Replaces the ``security``-CLI wrapper (``claude_swap.macos_keychain``) with an
+    Replaces the ``security``-CLI wrapper (``claude_swap.claude.macos_keychain``) with an
     in-memory fake and injects a fake ``keyring`` module (for the lazy
     ``import keyring`` paths in purge/migrations). Tests marked
     ``@pytest.mark.no_keychain_fake`` opt out — either because they mock
@@ -575,7 +575,7 @@ def block_real_oauth_profile_fetch(request, monkeypatch):
     if request.node.get_closest_marker("no_oauth_profile_fake"):
         yield
         return
-    monkeypatch.setattr("claude_swap.oauth.fetch_oauth_profile", lambda token: None)
+    monkeypatch.setattr("claude_swap.claude.oauth.fetch_oauth_profile", lambda token: None)
     yield
 
 

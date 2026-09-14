@@ -31,7 +31,9 @@ from pathlib import Path
 
 import pytest
 
-from claude_swap import paths, session
+from claude_swap import paths
+
+from claude_swap.claude import session
 from claude_swap.models import Platform
 from tests import conftest
 
@@ -848,7 +850,7 @@ def test_c0_a_scratch_home_still_protects_the_os_account_home_store(monkeypatch,
     # fallback the third snapshot depends on. Restore the real
     # `Path.home` for this test -- $HOME stays scratch, which is the
     # condition under test.
-    from claude_swap import macos_keychain
+    from claude_swap.claude import macos_keychain
 
     monkeypatch.setattr(Path, "home", _REAL_PATH_HOME)
     assert (

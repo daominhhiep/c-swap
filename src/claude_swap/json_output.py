@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from claude_swap import oauth, pace
+from claude_swap import pace
+
+from claude_swap.claude import oauth
 
 # Bump only on a breaking change to any payload shape. Scripts key off this.
 SCHEMA_VERSION = 1

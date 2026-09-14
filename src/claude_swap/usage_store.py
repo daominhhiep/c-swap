@@ -36,7 +36,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from claude_swap.locking import FileLock
-from claude_swap import oauth
+from claude_swap.claude import oauth
 from claude_swap.poll_policy import (
     EDGE_BACKOFF_S,
     EXHAUSTED_INTERVAL_S,

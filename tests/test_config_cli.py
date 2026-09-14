@@ -258,11 +258,11 @@ class TestConfigMisc:
                 captured["settings"] = settings
 
             def tick(self):
-                from claude_swap.autoswitch import TickOutcome
+                from claude_swap.claude.autoswitch import TickOutcome
 
                 return TickOutcome.NO_ACTION
 
-        with patch("claude_swap.autoswitch.AutoSwitchEngine", FakeEngine), \
+        with patch("claude_swap.claude.autoswitch.AutoSwitchEngine", FakeEngine), \
              patch("os.geteuid", return_value=1000, create=True), \
              patch.object(sys, "argv", ["claude-swap", "auto", "--once"]):
             with pytest.raises(SystemExit):

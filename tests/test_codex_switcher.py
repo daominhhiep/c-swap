@@ -21,7 +21,7 @@ from claude_swap.exceptions import (
     ValidationError,
 )
 from claude_swap.json_output import USAGE_RELOGIN_REQUIRED, USAGE_TOKEN_EXPIRED
-from claude_swap.oauth import UsageOutcome
+from claude_swap.claude.oauth import UsageOutcome
 from claude_swap.usage_store import AUTH_DEAD_STRIKES, SERVE_TTL_S, UsageStore
 from tests.conftest import make_codex_auth, write_codex_auth
 

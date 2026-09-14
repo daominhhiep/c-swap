@@ -26,16 +26,16 @@ from unittest.mock import call, patch
 
 import pytest
 
-from claude_swap import macos_keychain
+from claude_swap.claude import macos_keychain
 from claude_swap.exceptions import SwitchError
 from claude_swap.models import Platform
 from claude_swap.json_output import (
     USAGE_KEYCHAIN_UNAVAILABLE,
     USAGE_NO_CREDENTIALS,
 )
-from claude_swap.credentials import ActiveCredentials
+from claude_swap.claude.credentials import ActiveCredentials
 from claude_swap.usage_store import FetchRecord
-from claude_swap.switcher import ClaudeAccountSwitcher
+from claude_swap.claude.switcher import ClaudeAccountSwitcher
 
 
 # ---------------------------------------------------------------------------
@@ -64,7 +64,7 @@ class TestBackupCredentialsSecurity:
     def test_read_account_credentials_uses_security_service(
         self, macos_switcher: ClaudeAccountSwitcher
     ):
-        with patch("claude_swap.credentials.macos_keychain") as mock_kc:
+        with patch("claude_swap.claude.credentials.macos_keychain") as mock_kc:
             mock_kc.get_password.return_value = "fake-token"
 
             result = macos_switcher._read_account_credentials("1", "user@example.com")
@@ -77,7 +77,7 @@ class TestBackupCredentialsSecurity:
     def test_write_account_credentials_uses_security_service(
         self, macos_switcher: ClaudeAccountSwitcher
     ):
-        with patch("claude_swap.credentials.macos_keychain") as mock_kc:
+        with patch("claude_swap.claude.credentials.macos_keychain") as mock_kc:
             # No existing backup → the .prev retention step has nothing to
             # keep and the write stays a single Keychain call.
             mock_kc.get_password.return_value = None
@@ -94,7 +94,7 @@ class TestBackupCredentialsSecurity:
     ):
         """Retention must not weaken storage posture: on a Keychain-backed
         Mac the previous generation goes to the Keychain, never a file."""
-        with patch("claude_swap.credentials.macos_keychain") as mock_kc:
+        with patch("claude_swap.claude.credentials.macos_keychain") as mock_kc:
             mock_kc.get_password.return_value = "old-generation"
             macos_switcher._write_account_credentials(
                 "2", "alice@example.com", "secret-token"
@@ -114,7 +114,7 @@ class TestBackupCredentialsSecurity:
     def test_delete_account_credentials_uses_security_service(
         self, macos_switcher: ClaudeAccountSwitcher
     ):
-        with patch("claude_swap.credentials.macos_keychain") as mock_kc:
+        with patch("claude_swap.claude.credentials.macos_keychain") as mock_kc:
             macos_switcher._delete_account_credentials("3", "bob@example.com")
 
             mock_kc.delete_password.assert_has_calls([
@@ -339,7 +339,7 @@ class TestOurOwnFileModeIsNotAKeychainFailure:
         ``invalid_grant``, and quarantines a slot whose live refresh token is
         sitting unread in the Keychain.
         """
-        from claude_swap import macos_keychain as _kc
+        from claude_swap.claude import macos_keychain as _kc
 
         store = macos_switcher._store
         store._keychain_usable_cache = True
@@ -385,7 +385,7 @@ class TestOurOwnFileModeIsNotAKeychainFailure:
         residual survives and Claude Code reads Keychain-first — our file is
         the superseded generation, POSTed with the guard disarmed.
         """
-        from claude_swap import macos_keychain as _kc
+        from claude_swap.claude import macos_keychain as _kc
 
         store = macos_switcher._store
         store._keychain_usable_cache = True
@@ -430,7 +430,7 @@ class TestOurOwnFileModeIsNotAKeychainFailure:
         """
         import json
 
-        from claude_swap import macos_keychain as _kc
+        from claude_swap.claude import macos_keychain as _kc
         from claude_swap.exceptions import CredentialReadError
         from claude_swap.paths import get_credentials_path
 
@@ -469,7 +469,7 @@ class TestOurOwnFileModeIsNotAKeychainFailure:
         The read is now the witness, so the failure has to be real for the
         verdict to be real — which is the guarantee the name claims.
         """
-        from claude_swap import macos_keychain as _kc
+        from claude_swap.claude import macos_keychain as _kc
 
         store = macos_switcher._store
 
@@ -511,7 +511,7 @@ class TestOurOwnFileModeIsNotAKeychainFailure:
         reaches the line that sets the flag — so whatever the last real read
         left behind would be reported as if it were this read's answer.
         """
-        from claude_swap import macos_keychain as _kc
+        from claude_swap.claude import macos_keychain as _kc
 
         store = macos_switcher._store
         real_get = _kc.get_password
@@ -551,7 +551,7 @@ class TestOurOwnFileModeIsNotAKeychainFailure:
         """
         import time
 
-        from claude_swap import macos_keychain as _kc
+        from claude_swap.claude import macos_keychain as _kc
 
         store = macos_switcher._store
         store._keychain_usable_cache = True
@@ -610,7 +610,7 @@ class TestOurOwnFileModeIsNotAKeychainFailure:
         """
         import time
 
-        from claude_swap import macos_keychain as _kc
+        from claude_swap.claude import macos_keychain as _kc
 
         store = macos_switcher._store
         store._keychain_usable_cache = True
@@ -665,7 +665,7 @@ class TestOurOwnFileModeIsNotAKeychainFailure:
         wrong about WHAT it observes. "The Keychain answers" and "this active
         read succeeded" are different facts, and `degraded` needs the second.
         """
-        from claude_swap import macos_keychain as _kc
+        from claude_swap.claude import macos_keychain as _kc
 
         store = macos_switcher._store
         store._keychain_usable_cache = True
@@ -713,7 +713,7 @@ class TestOurOwnFileModeIsNotAKeychainFailure:
         """
         import time
 
-        from claude_swap import macos_keychain as _kc
+        from claude_swap.claude import macos_keychain as _kc
 
         store = macos_switcher._store
         healthy = _kc.get_password
@@ -873,7 +873,7 @@ class TestOurOwnFileModeIsNotAKeychainFailure:
         import threading
         import time
 
-        from claude_swap import macos_keychain as _kc
+        from claude_swap.claude import macos_keychain as _kc
 
         store = macos_switcher._store
         store._keychain_usable_cache = True
@@ -943,7 +943,7 @@ class TestOurOwnFileModeIsNotAKeychainFailure:
         never refreshed and `_resync_rotated_backup` never runs — the exact
         list `5928119` was written to prevent, one flag over.
         """
-        from claude_swap import macos_keychain as _kc
+        from claude_swap.claude import macos_keychain as _kc
 
         store = macos_switcher._store
         store._keychain_usable_cache = True
@@ -998,7 +998,7 @@ class TestOurOwnFileModeIsNotAKeychainFailure:
         """
         import time
 
-        from claude_swap import macos_keychain as _kc
+        from claude_swap.claude import macos_keychain as _kc
 
         store = macos_switcher._store
         store._keychain_usable_cache = True
@@ -1044,7 +1044,7 @@ class TestOurOwnFileModeIsNotAKeychainFailure:
         unrelated slot happened to be read first. The pin records the delete's
         own outcome, which no other item's success can speak for.
         """
-        from claude_swap import macos_keychain as _kc
+        from claude_swap.claude import macos_keychain as _kc
 
         store = macos_switcher._store
         store._keychain_usable_cache = True
@@ -1099,7 +1099,7 @@ class TestOurOwnFileModeIsNotAKeychainFailure:
         `_read_account_credentials_ex` already returns the per-read verdict;
         the sentinel just was not asking it.
         """
-        from claude_swap import macos_keychain as _kc
+        from claude_swap.claude import macos_keychain as _kc
 
         s = macos_switcher
         store = s._store
@@ -1132,7 +1132,7 @@ class TestOurOwnFileModeIsNotAKeychainFailure:
         deferring long after the Keychain answered again.
         """
         import time
-        from claude_swap import macos_keychain as _kc
+        from claude_swap.claude import macos_keychain as _kc
 
         store = macos_switcher._store
         with pytest.raises(_kc.KeychainError):

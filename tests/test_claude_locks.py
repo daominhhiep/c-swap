@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from claude_swap import claude_locks
-from claude_swap.claude_locks import (
+from claude_swap.claude import claude_locks
+from claude_swap.claude.claude_locks import (
     claude_config_lock,
     claude_credentials_lock,
     config_lock_dir,

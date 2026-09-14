@@ -6,7 +6,9 @@ import json
 
 import pytest
 
-from claude_swap import oauth, usage_store
+from claude_swap import usage_store
+
+from claude_swap.claude import oauth
 from claude_swap.usage_store import (
     BACKOFF_BASE_S,
     BACKOFF_CAP_S,

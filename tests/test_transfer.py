@@ -14,9 +14,9 @@ import pytest
 
 from claude_swap.exceptions import TransferError
 from claude_swap.models import Platform
-from claude_swap.oauth import credential_fingerprint
-from claude_swap.switcher import ClaudeAccountSwitcher
-from claude_swap.transfer import export_accounts, import_accounts
+from claude_swap.claude.oauth import credential_fingerprint
+from claude_swap.claude.switcher import ClaudeAccountSwitcher
+from claude_swap.claude.transfer import export_accounts, import_accounts
 from claude_swap.usage_store import FetchRecord
 
 
@@ -1455,7 +1455,7 @@ class TestImportSessionInvalidation:
     def test_force_overwrite_invalidates_session_credentials(
         self, temp_home: Path, capsys
     ):
-        from claude_swap.session import session_dir_for
+        from claude_swap.claude.session import session_dir_for
 
         s = _linux_switcher(temp_home)
         _seed_account(s, 1, "alice@example.com", "org-a")
@@ -1478,7 +1478,7 @@ class TestImportSessionInvalidation:
     ):
         import os as _os
 
-        from claude_swap.session import session_dir_for
+        from claude_swap.claude.session import session_dir_for
 
         s = _linux_switcher(temp_home)
         _seed_account(s, 1, "alice@example.com", "org-a")
@@ -1652,7 +1652,7 @@ class TestImportClearsDeadTokenQuarantine:
         a plain import then replaces a healthy slot's credential, which is the
         whole reason `--force` exists.
         """
-        from claude_swap import oauth
+        from claude_swap.claude import oauth
 
         s = _linux_switcher(temp_home)
         _seed_account(s, 2, "bob@example.com")
@@ -1736,7 +1736,7 @@ class TestImportClearsDeadTokenQuarantine:
         reads it as healthy and refuses to replace it — and `ccswap import` is
         exactly what the "re-login needed" message tells the user to run.
         """
-        from claude_swap import oauth
+        from claude_swap.claude import oauth
 
         s = _linux_switcher(temp_home)
         _seed_account(s, 2, "bob@example.com")
@@ -1855,7 +1855,7 @@ class TestImportClearsDeadTokenQuarantine:
         keeps its own credential copy until restarted via `ccswap run`."""
         import os as _os
 
-        from claude_swap.session import session_dir_for
+        from claude_swap.claude.session import session_dir_for
 
         s = _linux_switcher(temp_home)
         _seed_account(s, 2, "bob@example.com")

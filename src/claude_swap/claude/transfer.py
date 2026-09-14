@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from claude_swap import __version__
-from claude_swap.credentials import looks_like_api_key
+from claude_swap.claude.credentials import looks_like_api_key
 from claude_swap.exceptions import (
     ConfigError,
     CredentialReadError,
@@ -23,10 +23,10 @@ from claude_swap.exceptions import (
 )
 from claude_swap.fsutil import replace_with_retry
 from claude_swap.models import Platform, get_timestamp, normalize_alias
-from claude_swap.oauth import credential_fingerprint
+from claude_swap.claude.oauth import credential_fingerprint
 
 if TYPE_CHECKING:
-    from claude_swap.switcher import ClaudeAccountSwitcher
+    from claude_swap.claude.switcher import ClaudeAccountSwitcher
 
 
 FORMAT_VERSION = 1

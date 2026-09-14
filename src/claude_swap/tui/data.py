@@ -20,10 +20,12 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable
 
-from claude_swap import oauth, printer, usage_store
+from claude_swap import printer, usage_store
+
+from claude_swap.claude import oauth
 from claude_swap.exceptions import ClaudeSwitchError
 from claude_swap.snapshot_source import SnapshotSource
-from claude_swap.switcher import SENTINEL_NOTES, last_seen_note
+from claude_swap.claude.switcher import SENTINEL_NOTES, last_seen_note
 
 
 # ---------------------------------------------------------------------------
