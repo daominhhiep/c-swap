@@ -33,7 +33,7 @@ class CswapApp(App):
     """claude-swap interactive dashboard."""
 
     TITLE = "claude-swap"
-    CSS_PATH = "cswap.tcss"
+    CSS_PATH = "ccswap.tcss"
     # No command palette: actions live in the dashboard's nested menu, in
     # their own context — not in a global searchable list.
     ENABLE_COMMAND_PALETTE = False
@@ -59,7 +59,7 @@ class CswapApp(App):
     ) -> None:
         super().__init__()
         self.switcher = switcher
-        self._start = start  # "dashboard" | "watch" (`cswap watch`)
+        self._start = start  # "dashboard" | "watch" (`ccswap watch`)
         self._detected = detected  # terminal background sensed pre-driver, or None
         self.source = SnapshotSource(switcher)
         self._store_only = False
@@ -88,7 +88,7 @@ class CswapApp(App):
         self.register_theme(CSWAP_LIGHT)
         resolved = self._resolved_theme()
         # We own the theme; $TEXTUAL_THEME is intentionally not honoured.
-        self.theme = f"cswap-{resolved}"
+        self.theme = f"ccswap-{resolved}"
         printer.set_theme(resolved)
         self.push_screen(DashboardScreen())
         if self._start == "watch":
@@ -419,7 +419,7 @@ class CswapApp(App):
         detection (never re-probes mid-session)."""
         self._theme_name = name
         resolved = self._resolved_theme()
-        self.theme = f"cswap-{resolved}"
+        self.theme = f"ccswap-{resolved}"
         printer.set_theme(resolved)
         try:
             set_setting(self.switcher.backup_dir, "ui.theme", name)

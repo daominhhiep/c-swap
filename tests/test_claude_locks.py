@@ -102,7 +102,7 @@ class TestLockPaths:
 class TestCcRefreshLockProtocol:
     """Claude Code 2.1.218 guards its OAuth refresh with TWO locks —
     ``<config-home>/.oauth_refresh.lock`` (primary) then the legacy
-    ``<config-home>.lock`` — both at a 60s staleness. cswap must follow the
+    ``<config-home>.lock`` — both at a 60s staleness. ccswap must follow the
     same protocol or mutual exclusion silently fails (extracted from the
     2.1.218 bundle: ``uKi``/``CKi``, ``stale: 60000, update: 5000``)."""
 

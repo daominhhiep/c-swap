@@ -6,7 +6,7 @@ account-targeted opens a context of its own:
 
 - ``s`` / menu "Switch account" → :class:`SwitchScreen` — every account
   full-size, Enter switches, pops back.
-- ``w`` / menu "Watch accounts" / ``cswap watch`` → :class:`WatchScreen` —
+- ``w`` / menu "Watch accounts" / ``ccswap watch`` → :class:`WatchScreen` —
   the same full cards but read-only: a live monitor. ``s`` arms selection
   (cursor appears on the active account), Enter switches and *stays
   watching*, Esc disarms.

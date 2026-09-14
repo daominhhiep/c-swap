@@ -1,10 +1,10 @@
-"""macOS menu bar app for claude-swap (``cswap --menubar``).
+"""macOS menu bar app for claude-swap (``ccswap --menubar``).
 
 A thin GUI shell over ``ClaudeAccountSwitcher`` and the core auto-switch engine
 (``claude_swap.autoswitch``) — it never re-implements account, usage, or
 auto-switch logic. Usage for display comes from ``switcher.accounts_snapshot()``
 (backed by the shared usage store); auto-switching, when enabled, runs the same
-``AutoSwitchEngine`` the CLI's ``cswap auto`` drives, sharing
+``AutoSwitchEngine`` the CLI's ``ccswap auto`` drives, sharing
 ``autoswitch_state.json`` and the ``autoswitch.*`` settings. The menu bar keeps
 only its own display preferences.
 
@@ -495,13 +495,13 @@ def framework_build_warning(
 
     if install_method == "uv":
         remedy = (
-            "  uv tool install --managed-python --force 'claude-swap[menubar]'"
+            "  uv tool install --managed-python --force 'ccswap[menubar] @ git+https://github.com/daominhhiep/c-swap'"
         )
     elif install_method == "pipx":
         remedy = (
             "  Reinstall against a non-framework interpreter, e.g. one from "
             "`uv python install 3.13`:\n"
-            "  pipx install --force --python <that python> 'claude-swap[menubar]'"
+            "  pipx install --force --python <that python> 'ccswap[menubar] @ git+https://github.com/daominhhiep/c-swap'"
         )
     else:
         remedy = (
@@ -517,7 +517,7 @@ def framework_build_warning(
 
 
 def run(switcher) -> int:
-    """Entry point for ``cswap --menubar``. Blocks until the user quits."""
+    """Entry point for ``ccswap --menubar``. Blocks until the user quits."""
     ensure_notification_identity()
     _warn = framework_build_warning()
     if _warn:
@@ -536,7 +536,7 @@ def run(switcher) -> int:
         # error type the CLI already renders cleanly instead of a traceback.
         raise ClaudeSwitchError(
             "Menu bar mode requires 'rumps'. "
-            "Install with: pip install 'claude-swap[menubar]'"
+            "Install with: pip install 'ccswap[menubar] @ git+https://github.com/daominhhiep/c-swap'"
         ) from e
 
     # rumps never sets an activation policy, so under a framework Python the
@@ -572,7 +572,7 @@ def run(switcher) -> int:
             self._config_path = switcher._get_claude_config_path()
             self._config_mtime = 0.0
             self._last_usage_log: dict = {}  # account num -> last-logged (5h, 7d) key
-            # Auto-switch engine (the same one `cswap auto` runs), hosted in a
+            # Auto-switch engine (the same one `ccswap auto` runs), hosted in a
             # background thread while enabled.
             self._engine = None
             self._engine_events: list = []
@@ -991,7 +991,7 @@ def run(switcher) -> int:
                     title="claude-swap",
                     message="Couldn't read the active credential. If the menu bar is running "
                             "as a background/login agent, macOS blocks its Keychain access — "
-                            "quit and relaunch it from a Terminal with: cswap --menubar",
+                            "quit and relaunch it from a Terminal with: ccswap --menubar",
                 )
                 return
             except ClaudeSwitchError as e:

@@ -1,8 +1,8 @@
-"""Multi-account switcher for Claude Code."""
+"""Multi-account switcher for Claude Code and the Codex CLI (ccswap)."""
 
 from importlib.metadata import version
 
-__version__ = version("claude-swap")
+__version__ = version("ccswap")
 
 from claude_swap.switcher import ClaudeAccountSwitcher
 

@@ -91,12 +91,12 @@ def _freeze_real_store_specs() -> tuple[tuple[Path, bool], ...]:
       Both must be protected: the default-profile developer and the
       override-profile developer are both real users of this same conftest.
 
-    ``recursive=True`` roots (the cswap backup root, current-XDG and legacy)
-    are exclusively cswap's own data — everything beneath them is protected,
+    ``recursive=True`` roots (the ccswap backup root, current-XDG and legacy)
+    are exclusively ccswap's own data — everything beneath them is protected,
     any depth. This applies to an override-derived backup root too: it's
-    still cswap's own data regardless of which env var pointed at it.
+    still ccswap's own data regardless of which env var pointed at it.
 
-    ``recursive=False`` roots are directories cswap shares with unrelated
+    ``recursive=False`` roots are directories ccswap shares with unrelated
     machinery — notably ``~/.claude``, which also holds Claude Code CLI's
     OWN job/worktree/project state (this worktree itself lives under
     ``~/.claude/jobs/...``, several directories deep) and can contain a
@@ -264,7 +264,7 @@ _REAL_STORE_HINTS = _derive_real_store_hints(_REAL_STORE_SPECS, _HOME_AT_FREEZE_
 # The single filename test_real_store_guard.py's controls plant in the real
 # store to prove the hook refuses them. Its removal is exempt so those cases
 # can clean up after themselves; nothing else may carry this name.
-_GUARD_PROBE_MARKER = ".cswap-test-real-store-guard-probe-DELETE-ME"
+_GUARD_PROBE_MARKER = ".ccswap-test-real-store-guard-probe-DELETE-ME"
 
 _WRITE_EVENTS = frozenset(
     {

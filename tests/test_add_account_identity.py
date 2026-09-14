@@ -1,4 +1,4 @@
-"""`cswap add` must not store a credential that belongs to another account.
+"""`ccswap add` must not store a credential that belongs to another account.
 
 MEASURED IN THE FIELD (2026-08-03, work-mac): a session registered
 one address and the slot received a DIFFERENT account's credential.
@@ -9,7 +9,7 @@ from the keychain/file store, and nothing asks whether the two agree.
 
 The damage is silent and durable: the slot is LABELLED one account and CONTAINS the
 other account, so every later switch to that slot logs the wrong user in,
-and `cswap --status` shows a name that is not whose token is stored.
+and `ccswap --status` shows a name that is not whose token is stored.
 
 `oauth.fetch_oauth_profile` already answers exactly this question ("whose
 token is this") and is used by the autoswitch identity oracle. add_account
@@ -189,7 +189,7 @@ def test_add_refuses_a_foreign_credential_on_refresh_in_place(
     Not a corner: the menu bar's "Refresh current credentials"
     (`on_refresh_creds`) and "From current login" (`on_add_login`), and the
     TUI's "Add current login", all call `add_account` with no slot and take
-    this branch. `cswap`'s auto-add does
+    this branch. `ccswap`'s auto-add does
     NOT -- it fires only when the active account is unmanaged, and this branch
     requires that it IS managed, the same predicate on the same two arguments.
     Here the slot already carries the RIGHT label, so an unguarded
@@ -644,7 +644,7 @@ def test_the_refresh_in_place_path_also_refuses_a_login_in_the_window(
     """C1: the recheck must cover BOTH write paths, not just the create one.
 
     `slot=None` on an already-registered account is the branch the menu bar,
-    the TUI and a bare `cswap --add-account` all take -- the dominant one. It
+    the TUI and a bare `ccswap --add-account` all take -- the dominant one. It
     reads `.claude.json` a second time for the blob it stores, and a later
     switch installs that blob's `oauthAccount` as the identity. So a `/login`
     in the guard's window puts account B's identity on slot A's credential:

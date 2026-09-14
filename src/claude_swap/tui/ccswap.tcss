@@ -1,5 +1,5 @@
 /* claude-swap TUI — flat, low-chrome dark layout.
-   Colors come from the registered "cswap-dark" theme (theme.py); this file
+   Colors come from the registered "ccswap-dark" theme (theme.py); this file
    only handles layout, spacing, and the few component states. */
 
 Screen {

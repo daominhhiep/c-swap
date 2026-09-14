@@ -287,7 +287,7 @@ class TestAtomicWriteThroughSymlink:
     detaches it and the target silently stops updating. Covers the write
     itself plus the two placement decisions it forces: the temp file goes
     beside the RESOLVED target (else EXDEV across mounts), the 0700 chmod
-    stays on the directory cswap owns (else it narrows — or cannot touch —
+    stays on the directory ccswap owns (else it narrows — or cannot touch —
     a foreign one)."""
 
     def test_write_preserves_the_link_and_updates_the_target(self, tmp_path):
@@ -342,7 +342,7 @@ class TestAtomicWriteThroughSymlink:
 
     @pytest.mark.skipif(sys.platform == "win32", reason="POSIX modes")
     def test_hardening_stays_on_the_directory_cswap_owns(self, tmp_path):
-        """The 0700 belongs to cswap's own dir. On the target's parent it
+        """The 0700 belongs to ccswap's own dir. On the target's parent it
         would narrow a foreign directory, and raise PermissionError when
         that parent cannot be chmod'ed at all."""
         repo = tmp_path / "repo"; repo.mkdir(mode=0o755)

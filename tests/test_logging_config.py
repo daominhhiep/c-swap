@@ -11,7 +11,7 @@ from claude_swap.logging_config import setup_logging
 def test_setup_does_not_create_dir(tmp_path: Path):
     """Calling setup_logging must not materialize the log directory.
 
-    The log dir lives under the cswap backup root; pre-creating it laid down
+    The log dir lives under the ccswap backup root; pre-creating it laid down
     cache/log artifacts that later tripped the legacy → XDG migration
     collision check (see paths.migrate_legacy_backup_dir).
     """

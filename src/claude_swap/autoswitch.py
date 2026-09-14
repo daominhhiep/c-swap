@@ -23,7 +23,7 @@ active account's own usage becomes unreadable for ``unhealthy_ticks``
 consecutive ticks, the engine fails over to any healthy candidate.
 
 Cooldown and quarantine persist in ``<backup_root>/autoswitch_state.json``
-(so cron-driven ``cswap auto --once`` ticks behave across processes), mutated
+(so cron-driven ``ccswap auto --once`` ticks behave across processes), mutated
 read-modify-write under a dedicated file lock.
 """
 
@@ -72,13 +72,13 @@ _logger = logging.getLogger("claude-swap")
 # cause of the only slot that had one beats "(network?)".
 _SYSTEMIC_MESSAGES = {
     "store-unmirrored": "CLAUDE_SECURESTORAGE_CONFIG_DIR is set — unset it or "
-                        "run cswap from a normal shell",
-    "invalid_client": "cswap's OAuth client was rejected — systemic, not this "
+                        "run ccswap from a normal shell",
+    "invalid_client": "ccswap's OAuth client was rejected — systemic, not this "
                       "account",
     "stash-unreadable": "a stashed successor is unreadable — unlock the "
                         "keychain or fix the file, then retry; "
-                        "`cswap unclaimed` inspects it",
-    "consume-busy": "another cswap surface holds the slot — retries next pass",
+                        "`ccswap unclaimed` inspects it",
+    "consume-busy": "another ccswap surface holds the slot — retries next pass",
 }
 # Insertion order IS the precedence order, so the remedy and its rank cannot
 # drift apart.
@@ -416,7 +416,7 @@ class QuarantineEvent(AutoSwitchEvent):
     def human(self) -> str:
         return (
             f"Account-{self.number} ({self.email}) quarantined: {self.reason}. "
-            f"Log in with it and run 'cswap --add-account --slot {self.number}' "
+            f"Log in with it and run 'ccswap --add-account --slot {self.number}' "
             "to recover."
         )
 
@@ -521,7 +521,7 @@ def _window_pcts(
     Deliberately restricted to the windows the *decision* reads (same
     ``models`` filter): showing an unconfigured scoped window at 100% next
     to a switch onto that account would look like a bug, when the engine
-    correctly ignored it. Full per-model usage lives in ``cswap list``.
+    correctly ignored it. Full per-model usage lives in ``ccswap list``.
     """
     return {
         name: pct for name, pct, _ in oauth.relevant_windows(usage, models)
@@ -780,7 +780,7 @@ class AutoSwitchEngine:
         if self.switcher.account_kind_for(number) == "api_key":
             return "ok"  # API keys don't expire/refresh
         if self.switcher.live_session_pids_for(number, email):
-            # A live `cswap run` session owns this account's token in its own
+            # A live `ccswap run` session owns this account's token in its own
             # profile. Auto-activating it as the default login too would put
             # one rotating refresh token in two config dirs (the stale-copy
             # failure class) with nobody reading the warning — and its quota
@@ -911,19 +911,19 @@ class AutoSwitchEngine:
                 PollEvent(active=None, headroom={}, threshold=settings.threshold)
             )
             if self.switcher.has_live_login():
-                # Live login exists but cswap doesn't manage it: never act —
+                # Live login exists but ccswap doesn't manage it: never act —
                 # a switch would overwrite it without a backup.
                 self._emit(
                     NoSwitchEvent(
                         reason="unmanaged-active-account",
-                        detail="run 'cswap --add-account' to include it in rotation",
+                        detail="run 'ccswap --add-account' to include it in rotation",
                     )
                 )
             else:
                 self._emit(
                     NoSwitchEvent(
                         reason="no-active-account",
-                        detail="log in and run 'cswap --add-account' first",
+                        detail="log in and run 'ccswap --add-account' first",
                     )
                 )
             return TickOutcome.NO_ACTION
@@ -2120,7 +2120,7 @@ class AutoSwitchEngine:
         # sequence so two concurrent engines (loop + cron --once) make one
         # serialized decision: the loser re-reads the winner's lastSwitchAt
         # and backs off instead of double-switching. No deadlock cycle: the
-        # switch path (cswap FileLock + Claude Code locks) never takes the
+        # switch path (ccswap FileLock + Claude Code locks) never takes the
         # state lock.
         with self._state_lock():
             state = self._read_state()

@@ -1,6 +1,6 @@
 """Session mode: run Claude Code as a stored account in one terminal.
 
-``cswap run NUM|EMAIL`` launches Claude Code with ``CLAUDE_CONFIG_DIR``
+``ccswap run NUM|EMAIL`` launches Claude Code with ``CLAUDE_CONFIG_DIR``
 pointing at a persistent per-account profile under
 ``<backup_dir>/sessions/<num>-<email-slug>/``, leaving the default
 ``~/.claude/`` login (and every other terminal, plus the VS Code extension)
@@ -20,7 +20,7 @@ Sharing: by default the user's ``settings.json``, ``keybindings.json``,
 the session profile — symlinks on macOS/Linux (Claude's settings writer
 detects symlinks and writes through to the target, so in-session ``/config``
 changes land in ``~/.claude``), copies re-synced on every launch on Windows.
-A manifest records what cswap created so removal never touches user data.
+A manifest records what ccswap created so removal never touches user data.
 
 History sharing (``--share-history``, opt-in): additionally links
 ``projects/`` (conversation transcripts — what ``claude --resume`` lists) and
@@ -89,27 +89,27 @@ HISTORY_ITEMS = (
     "history.jsonl",
 )
 
-# Records which entries in a session profile cswap created (so --no-share and
-# re-syncs only ever remove cswap-managed links/copies, never user data).
-SHARE_MANIFEST = ".cswap-shared.json"
+# Records which entries in a session profile ccswap created (so --no-share and
+# re-syncs only ever remove ccswap-managed links/copies, never user data).
+SHARE_MANIFEST = ".ccswap-shared.json"
 
 # Deferred-invalidation marker: backup credentials changed while a session was
 # live (we never pull credentials out from under a running claude), so the
-# profile must be re-bootstrapped on the next non-live `cswap run` even if it
+# profile must be re-bootstrapped on the next non-live `ccswap run` even if it
 # still passes the local reuse check.
-STALE_MARKER = ".cswap-stale-credentials"
+STALE_MARKER = ".ccswap-stale-credentials"
 
 # The user-scope MCP key mirrored from the default profile's .claude.json.
 MCP_KEY = "mcpServers"
 
-# Adoption marker: this profile's mcpServers is (or was) cswap-mirrored. Gates
+# Adoption marker: this profile's mcpServers is (or was) ccswap-mirrored. Gates
 # both the one-time migration stash and --no-share's removal of the key, so
 # pre-feature session-local definitions are never silently destroyed.
-MCP_MIRROR_MARKER = ".cswap-mcp-mirror-v1"
+MCP_MIRROR_MARKER = ".ccswap-mcp-mirror-v1"
 
 # One-time migration stash: session-local MCP definitions displaced by the
 # first mirror land here (write-once) instead of vanishing.
-MCP_DISPLACED_STASH = ".cswap-mcp-displaced.json"
+MCP_DISPLACED_STASH = ".ccswap-mcp-displaced.json"
 
 
 def stale_marker_for(session_dir: Path) -> Path:
@@ -134,7 +134,7 @@ def is_session_stale(session_dir: Path) -> bool:
     """Whether a profile is flagged for re-bootstrap.
 
     Both locations: the child path is where the marker used to live, and a
-    profile marked by an older cswap on this machine has a pending
+    profile marked by an older ccswap on this machine has a pending
     re-bootstrap that the move must not drop. Read, never written.
     """
     return (
@@ -186,7 +186,7 @@ def mark_session_stale(session_dir: Path) -> bool:
 # Env vars that make claude bypass account OAuth entirely (verified against
 # claude 2.1.175). Dropped from the auth-status probe (they'd fake "logged in"
 # for the wrong reason) AND scrubbed from the session launch env with a
-# warning: `cswap run N` is an explicit request for account N, so letting an
+# warning: `ccswap run N` is an explicit request for account N, so letting an
 # exported API key silently hijack the session would defeat the command. The
 # same-account fast path (plain claude, untouched env) does not scrub.
 AUTH_OVERRIDE_ENV_VARS = (
@@ -278,7 +278,7 @@ def read_session_credentials(session_dir: Path) -> str | None:
     credential lives in the profile's hashed keychain entry (which shadows
     the plaintext seed from the moment claude first writes it), elsewhere in
     the profile's ``.credentials.json``. Read-only by design: writing either
-    location stays claude's job (see the module docstring on why cswap never
+    location stays claude's job (see the module docstring on why ccswap never
     writes the hashed entry). Returns ``None`` when the profile has no
     readable credential material.
     """
@@ -626,7 +626,7 @@ class SessionManager:
     def exec_default(self, claude_args: list[str]) -> NoReturn:
         """Launch plain Claude Code with the current default login.
 
-        Used by `cswap run` (no account) when the cwd has no mapping, or its
+        Used by `ccswap run` (no account) when the cwd has no mapping, or its
         mapped account no longer exists. Equivalent to typing `claude`
         directly: the unmodified environment is passed through (no session
         profile, no auth-override scrubbing), so whatever the default login
@@ -642,7 +642,7 @@ class SessionManager:
     def _exec(self, claude_bin: str, claude_args: list[str], env: dict[str, str]) -> NoReturn:
         """Hand the terminal over to claude. Never returns.
 
-        POSIX: ``execvpe`` replaces the cswap process entirely (the lock is
+        POSIX: ``execvpe`` replaces the ccswap process entirely (the lock is
         already released — an exec'd claude must never inherit a held flock).
         Windows: ``os.exec*`` detaches from the console confusingly, so stay
         resident as a thin wrapper and mirror claude's exit code.
@@ -667,8 +667,8 @@ class SessionManager:
         if self.switcher._account_kind(account_num) == "api_key":
             raise SessionError(
                 f"Account-{account_num} ({email}) is an API-key account; "
-                "'cswap run' (session mode) does not support API-key accounts yet. "
-                "Use 'cswap --switch-to' to make it your default login instead."
+                "'ccswap run' (session mode) does not support API-key accounts yet. "
+                "Use 'ccswap --switch-to' to make it your default login instead."
             )
 
     # -- bootstrap -------------------------------------------------------
@@ -685,7 +685,7 @@ class SessionManager:
         # Deferred invalidation: backup credentials changed while this profile
         # was live, so its credentials are presumed stale even if they still
         # pass the local reuse check. Honored only when no session is live —
-        # a second `cswap run` joining a live session must not invalidate
+        # a second `ccswap run` joining a live session must not invalidate
         # under the running claude (the marker survives for later).
         stale = is_session_stale(session_dir) and profile_is_quiescent(session_dir)
 
@@ -754,7 +754,7 @@ class SessionManager:
                     f"spent grant and the successor is gone. Fix the storage "
                     f"failure first; retrying before that spends nothing but "
                     f"earns a strike. If the slot strikes, log in again and "
-                    f"re-add it: cswap --add-account --slot {account_num}"
+                    f"re-add it: ccswap --add-account --slot {account_num}"
                 )
             if outcome.error is not None:
                 warning(
@@ -764,14 +764,14 @@ class SessionManager:
 
         with FileLock(self.switcher.lock_file, timeout=_BOOTSTRAP_LOCK_TIMEOUT):
             # Re-evaluate the marker under the lock, then re-check validity:
-            # another `cswap run` may have bootstrapped while we waited.
+            # another `ccswap run` may have bootstrapped while we waited.
             if is_session_stale(session_dir) and profile_is_quiescent(session_dir):
                 self.switcher._invalidate_session_credentials(account_num, email)
                 clear_session_stale(session_dir)
             if self._is_session_valid(session_dir, email, org_uuid):
                 # Valid, but possibly not on the generation WE just paid for.
                 # The consume above runs outside this lock (it POSTs), so a
-                # peer `cswap run` can bootstrap while we wait — and its
+                # peer `ccswap run` can bootstrap while we wait — and its
                 # profile predates our rotation. Its refresh token is the one
                 # our gate consumed, so claude's own refresh would get
                 # invalid_grant on first use: a spent grant, silently.
@@ -828,7 +828,7 @@ class SessionManager:
                 raise SessionError(
                     f"Session profile for Account-{account_num} ({email}) failed "
                     f"validation. Log in with that account and re-add it: "
-                    f"cswap --add-account --slot {account_num}"
+                    f"ccswap --add-account --slot {account_num}"
                 )
         # Lock released here, before any exec.
 
@@ -879,7 +879,7 @@ class SessionManager:
                 )
             raise SessionError(
                 f"Account-{account_num} has no stored credentials. "
-                f"Re-add with: cswap --add-account --slot {account_num}"
+                f"Re-add with: ccswap --add-account --slot {account_num}"
             )
 
         # The pre-lock refresh (see run(): the consume gate must not run
@@ -896,7 +896,7 @@ class SessionManager:
         if not oauth_account:
             raise SessionError(
                 f"Account-{account_num} has no stored config backup. "
-                f"Re-add with: cswap --add-account --slot {account_num}"
+                f"Re-add with: ccswap --add-account --slot {account_num}"
             )
 
         session_dir.mkdir(parents=True, exist_ok=True)
@@ -1125,7 +1125,7 @@ class SessionManager:
 
             if dest.is_symlink():
                 if name not in managed:
-                    managed = [*managed, name]  # adopt: only cswap links here
+                    managed = [*managed, name]  # adopt: only ccswap links here
                 if use_symlinks:
                     try:
                         if dest.readlink() != link_target:
@@ -1174,7 +1174,7 @@ class SessionManager:
 
         Pure mirror: the default profile is the single source of truth, so
         adds, edits, and deletions all propagate, and MCP changes made inside
-        a session are overwritten the next time cswap prepares the profile.
+        a session are overwritten the next time ccswap prepares the profile.
         Nothing ever flows back into the default config, and per-project
         (``projects[…].mcpServers``) entries are untouched on both sides.
 
@@ -1290,7 +1290,7 @@ class SessionManager:
         genuinely has no user servers (``{}`` propagates the removal), while
         a missing/corrupt config or a non-dict key returns ``None`` so the
         caller leaves the profile untouched. Reads the default-home path
-        (ignoring CLAUDE_CONFIG_DIR — a nested `cswap run` must not source
+        (ignoring CLAUDE_CONFIG_DIR — a nested `ccswap run` must not source
         from another session); no lock needed, claude's writes are atomic.
         """
         config = SessionManager._load_json_object(get_default_global_config_path())
@@ -1475,7 +1475,7 @@ class SessionManager:
         mode = "symlink" if self.switcher.platform != Platform.WINDOWS else "copy"
         payload = json.dumps({"items": items, "mode": mode}, indent=2)
         fd, tmp = tempfile.mkstemp(
-            dir=str(manifest_path.parent), prefix=".cswap-shared-", suffix=".tmp"
+            dir=str(manifest_path.parent), prefix=".ccswap-shared-", suffix=".tmp"
         )
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
@@ -1489,7 +1489,7 @@ class SessionManager:
 
     @staticmethod
     def _remove_managed(dest: Path) -> None:
-        """Remove a cswap-created share entry (link or copy), never user data
+        """Remove a ccswap-created share entry (link or copy), never user data
         beyond it — callers guarantee `dest` is manifest-listed or a symlink."""
         try:
             if dest.is_symlink() or dest.is_file():

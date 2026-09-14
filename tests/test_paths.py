@@ -1,8 +1,8 @@
 """Tests for claude_swap.paths resolver helpers.
 
-These tests verify that cswap resolves Claude Code config/credential paths the
+These tests verify that ccswap resolves Claude Code config/credential paths the
 same way claude-code itself does. If these drift from claude-code's behavior,
-cswap will read the wrong files and misattribute accounts (see issue #16).
+ccswap will read the wrong files and misattribute accounts (see issue #16).
 """
 
 from __future__ import annotations
@@ -207,7 +207,7 @@ class TestMigrateLegacyBackupDir:
         """Run-1 created cache/log in target; legacy appears later → migrate anyway.
 
         Regression: pre-fix this raised "Both legacy and new exist" because
-        any prior cswap invocation laid down cache/ + claude-swap.log in the
+        any prior ccswap invocation laid down cache/ + claude-swap.log in the
         XDG path even when no real data was present.
         """
         legacy = isolated_home / LEGACY_BACKUP_DIRNAME

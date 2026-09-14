@@ -3,7 +3,7 @@
 Covers kind detection, ``--add-token`` auto-detection, the cross-kind collision
 guard, the ``add_account`` live-key guard, kind+platform-aware active credential
 read/write with OAuth↔API-key mutual exclusion, the "API key — no quota" usage
-display, the ``cswap run`` session guard, and export/import of raw keys.
+display, the ``ccswap run`` session guard, and export/import of raw keys.
 """
 
 from __future__ import annotations
@@ -339,7 +339,7 @@ class TestExportImport:
         with _patched_home(src_home):
             src = _linux_switcher()
             src.add_account_from_token(API_KEY, slot=1)
-            out = tmp_path / "b.cswap"
+            out = tmp_path / "b.ccswap"
             export_accounts(src, str(out))
             payload = json.loads(out.read_text(encoding="utf-8"))
             # exported as a raw string, tagged api_key — not a JSON object.
@@ -518,7 +518,7 @@ class TestATornConfigSurvivesAnOrdinarySwitch:
     file, reporting `switched: True`.
 
     Strictly worse than the bug the refusal closed: it needs no API-key slot,
-    it is what a plain `cswap switch` does, and the success line is what makes
+    it is what a plain `ccswap switch` does, and the success line is what makes
     it invisible.
     """
 
@@ -944,7 +944,7 @@ class TestTheSalvageKeepsItsPromise:
         """`copy2` preserves the SOURCE mode, and the source is often 0644.
 
         Measured before this: the replacement got 0600 from `_write_json` while
-        the salvage kept 0644 and held `primaryApiKey` — cswap created a
+        the salvage kept 0644 and held `primaryApiKey` — ccswap created a
         world-readable copy of the user's secret. Asserts the MODE, because a
         salvage that exists and leaks is worse than none.
 
@@ -995,7 +995,7 @@ class TestTheSalvageKeepsItsPromise:
         filename character on Linux, so a behavioural test is green here and
         red only on the platform nobody runs locally. The forbidden set is
         Windows', a superset of POSIX's — a name legal there is legal
-        everywhere cswap runs.
+        everywhere ccswap runs.
 
         The codebase already had two answers and neither was reused:
         `credentials.py:1372`'s `.corrupt-{int(time.time())}` and

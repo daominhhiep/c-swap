@@ -299,7 +299,7 @@ class TestFormatting:
         assert tui_data.format_age(400) == "· 6m ago"
 
     def test_sentinel_labels_match_cswap_list(self):
-        # The TUI must describe sentinel states with the exact wording `cswap
+        # The TUI must describe sentinel states with the exact wording `ccswap
         # list` prints — owned-and-expired means Claude Code refreshes the
         # active account, not that the user must re-login.
         assert (
@@ -314,7 +314,7 @@ class TestFormatting:
 
     def test_sentinel_card_shows_last_seen_like_cswap_list(self):
         # A sentinel is a live overlay — the entry can still carry the last
-        # good measurement, and `cswap list` prints it as a "last seen" line.
+        # good measurement, and `ccswap list` prints it as a "last seen" line.
         # The card must too (except for API-key accounts, which have no quota).
         from claude_swap.tui.widgets import account_card_text
 
@@ -394,7 +394,7 @@ class TestSnapshotSource:
 
     def test_every_pass_is_store_governed(self, tmp_path):
         # Pacing lives in the usage store (poll plans + freshness + atomic
-        # reservation), so every take is the same on-demand pass `cswap list`
+        # reservation), so every take is the same on-demand pass `ccswap list`
         # runs — including the user's explicit refresh, which cannot bypass
         # the store's per-account cadence.
         fake, source = self._source(tmp_path)
@@ -1603,7 +1603,7 @@ class TestBareInvocation:
             launched["switcher"] = switcher
             return 0
 
-        monkeypatch.setattr(sys, "argv", ["cswap"])
+        monkeypatch.setattr(sys, "argv", ["ccswap"])
         monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
         monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
         monkeypatch.setattr(tui, "run", fake_run)
@@ -1615,7 +1615,7 @@ class TestBareInvocation:
     def test_bare_non_tty_keeps_usage_error(self, monkeypatch, temp_home):
         import claude_swap.cli as cli
 
-        monkeypatch.setattr(sys, "argv", ["cswap"])
+        monkeypatch.setattr(sys, "argv", ["ccswap"])
         monkeypatch.setattr(sys.stdout, "isatty", lambda: False)
         monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
         with pytest.raises(SystemExit) as excinfo:
@@ -1632,7 +1632,7 @@ class TestBareInvocation:
             launched["start"] = start
             return 0
 
-        monkeypatch.setattr(sys, "argv", ["cswap", "watch"])
+        monkeypatch.setattr(sys, "argv", ["ccswap", "watch"])
         monkeypatch.setattr(tui, "run", fake_run)
         with pytest.raises(SystemExit) as excinfo:
             cli.main()
@@ -1653,7 +1653,7 @@ class TestThemeWiring:
         app = make_app(fake)
         async with app.run_test() as pilot:
             await settle(pilot)
-            assert app.theme == "cswap-light"
+            assert app.theme == "ccswap-light"
 
     async def test_auto_setting_uses_detected_light(self, tmp_path):
         (tmp_path / "settings.json").write_text(json.dumps({"ui": {"theme": "auto"}}))
@@ -1662,7 +1662,7 @@ class TestThemeWiring:
         app = CswapApp(fake, detected="light")
         async with app.run_test() as pilot:
             await settle(pilot)
-            assert app.theme == "cswap-light"
+            assert app.theme == "ccswap-light"
 
     async def test_auto_setting_no_detection_falls_back_to_dark(self, tmp_path):
         (tmp_path / "settings.json").write_text(json.dumps({"ui": {"theme": "auto"}}))
@@ -1671,7 +1671,7 @@ class TestThemeWiring:
         app = CswapApp(fake, detected=None)
         async with app.run_test() as pilot:
             await settle(pilot)
-            assert app.theme == "cswap-dark"
+            assert app.theme == "ccswap-dark"
 
     async def test_toggle_cycles_dark_light_auto(self, tmp_path):
         (tmp_path / "settings.json").write_text(json.dumps({"ui": {"theme": "dark"}}))
@@ -1680,14 +1680,14 @@ class TestThemeWiring:
         app = CswapApp(fake, detected="light")
         async with app.run_test() as pilot:
             await settle(pilot)
-            assert app.theme == "cswap-dark"          # setting dark
+            assert app.theme == "ccswap-dark"          # setting dark
             app.action_toggle_theme(); await pilot.pause()
-            assert app.theme == "cswap-light"          # → light
+            assert app.theme == "ccswap-light"          # → light
             app.action_toggle_theme(); await pilot.pause()
-            assert app.theme == "cswap-light"          # → auto, detected=light
+            assert app.theme == "ccswap-light"          # → auto, detected=light
             assert json.loads((tmp_path / "settings.json").read_text())["ui"]["theme"] == "auto"
             app.action_toggle_theme(); await pilot.pause()
-            assert app.theme == "cswap-dark"           # → back to dark
+            assert app.theme == "ccswap-dark"           # → back to dark
 
     async def test_theme_menu_marks_current_and_applies(self, tmp_path):
         from textual.widgets import ListView, Static
@@ -1708,5 +1708,5 @@ class TestThemeWiring:
             assert "●" in current  # the current theme is marked
             await menu_select(pilot, "theme:light")
             assert app._theme_name == "light"
-            assert app.theme == "cswap-light"
+            assert app.theme == "ccswap-light"
 

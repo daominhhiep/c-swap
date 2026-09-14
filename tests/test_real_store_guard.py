@@ -76,7 +76,7 @@ def test_control_b_and_c_real_store_write_is_refused(monkeypatch):
     """
     from claude_swap.exceptions import ClaudeSwitchError  # noqa: F401  (sanity import only)
 
-    marker_name = ".cswap-test-real-store-guard-probe-DELETE-ME"
+    marker_name = ".ccswap-test-real-store-guard-probe-DELETE-ME"
 
     monkeypatch.undo()  # expose the REAL, unpatched HOME from here on
 
@@ -533,7 +533,7 @@ def test_arbitrary_claude_config_dir_is_not_dropped_by_the_hint_prefilter(
     ran, so the write went through even though the root IS in
     ``_REAL_STORE_SPECS``.
     """
-    root_dir = Path(tempfile.mkdtemp(prefix="cswap-c2-noclaude-"))
+    root_dir = Path(tempfile.mkdtemp(prefix="ccswap-c2-noclaude-"))
     try:
         home = root_dir / "home"
         home.mkdir()
@@ -610,7 +610,7 @@ def test_i2_os_symlink_into_protected_root_is_refused(
 ):
     """I-2: ``os.symlink`` was not even in ``_WRITE_EVENTS``, so a symlink
     planted inside a protected root — aliasing an arbitrary target onto a
-    path a reader (Claude Code, cswap itself) would trust as real store
+    path a reader (Claude Code, ccswap itself) would trust as real store
     content — went through untouched."""
     stand_in_root = tmp_path / "claude-swap"
     stand_in_root.mkdir()
@@ -746,7 +746,7 @@ def test_mkdir_exist_ok_true_does_not_swallow_the_refusal(
 
     # Seed the dir OUTSIDE the guard's view (os.mkdir is unguarded here only
     # via direct filesystem bootstrap, matching how the real backup root
-    # exists on every developer machine before cswap ever runs in-process).
+    # exists on every developer machine before ccswap ever runs in-process).
     monkeypatch.setattr(conftest, "_REAL_STORE_SPECS", ())
     stand_in_root.mkdir(parents=True)
     monkeypatch.setattr(conftest, "_REAL_STORE_SPECS", ((stand_in_root, True),))

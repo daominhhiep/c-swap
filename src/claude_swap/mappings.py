@@ -1,7 +1,7 @@
-"""Directory → account mappings for `cswap run` auto-resolution.
+"""Directory → account mappings for `ccswap run` auto-resolution.
 
 Maps a normalized absolute directory path to a stored account identity
-(email + organizationUuid). `cswap run` with no account argument resolves the
+(email + organizationUuid). `ccswap run` with no account argument resolves the
 current working directory to the nearest mapped ancestor and launches that
 account in session mode.
 

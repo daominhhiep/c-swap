@@ -102,7 +102,7 @@ class TestRoundTrip:
         _seed_account(src, 1, "alice@example.com", "org-a", "Org A")
         _seed_account(src, 2, "bob@example.com")
 
-        out_file = temp_home / "backup.cswap"
+        out_file = temp_home / "backup.ccswap"
         export_accounts(src, str(out_file))
 
         # Sanity-check the file
@@ -143,7 +143,7 @@ class TestRoundTrip:
         data["activeAccountNumber"] = 2
         src._write_json(src.sequence_file, data)
 
-        out_file = temp_home / "backup.cswap"
+        out_file = temp_home / "backup.ccswap"
         export_accounts(src, str(out_file))
         envelope = json.loads(out_file.read_text())
         assert envelope["activeAccountNumber"] == 2
@@ -172,7 +172,7 @@ class TestAliasTransfer:
         _seed_account(src, 1, "alice@example.com", alias="dev")
         _seed_account(src, 2, "bob@example.com")
 
-        out_file = temp_home / "backup.cswap"
+        out_file = temp_home / "backup.ccswap"
         export_accounts(src, str(out_file))
         envelope = json.loads(out_file.read_text())
         by_email = {a["email"]: a for a in envelope["accounts"]}
@@ -194,7 +194,7 @@ class TestAliasTransfer:
         dst_home.mkdir()
         src = _linux_switcher(temp_home)
         _seed_account(src, 1, "alice@example.com", alias="dev")
-        out_file = temp_home / "backup.cswap"
+        out_file = temp_home / "backup.ccswap"
         export_accounts(src, str(out_file))
 
         with patch("pathlib.Path.home", return_value=dst_home):
@@ -219,7 +219,7 @@ class TestAliasTransfer:
         dst_home.mkdir()
         src = _linux_switcher(temp_home)
         _seed_account(src, 1, "alice@example.com", alias="dev")
-        out_file = temp_home / "backup.cswap"
+        out_file = temp_home / "backup.ccswap"
         export_accounts(src, str(out_file))
 
         with patch("pathlib.Path.home", return_value=dst_home):
@@ -236,7 +236,7 @@ class TestAliasTransfer:
         src = _linux_switcher(temp_home)
         _seed_account(src, 1, "alice@example.com", alias="dev")
         _seed_account(src, 2, "bob@example.com", alias="dev")
-        out_file = temp_home / "backup.cswap"
+        out_file = temp_home / "backup.ccswap"
         export_accounts(src, str(out_file))
         # Fabricate a duplicate alias in the exported envelope: export itself
         # can't produce this (uniqueness enforced at set-time), but a
@@ -257,7 +257,7 @@ class TestAliasTransfer:
     def test_import_invalid_alias_format_rejected(self, temp_home: Path):
         src = _linux_switcher(temp_home)
         _seed_account(src, 1, "alice@example.com")
-        out_file = temp_home / "backup.cswap"
+        out_file = temp_home / "backup.ccswap"
         export_accounts(src, str(out_file))
         envelope = json.loads(out_file.read_text())
         envelope["accounts"][0]["alias"] = "123"  # purely numeric — invalid
@@ -283,7 +283,7 @@ class TestSelectiveExport:
         _seed_account(s, 1, "a@example.com")
         _seed_account(s, 2, "b@example.com")
 
-        out = temp_home / "one.cswap"
+        out = temp_home / "one.ccswap"
         export_accounts(s, str(out), account="2")
         envelope = json.loads(out.read_text())
         assert len(envelope["accounts"]) == 1
@@ -294,7 +294,7 @@ class TestSelectiveExport:
         _seed_account(s, 1, "a@example.com")
         _seed_account(s, 2, "b@example.com")
 
-        out = temp_home / "one.cswap"
+        out = temp_home / "one.ccswap"
         export_accounts(s, str(out), account="a@example.com")
         envelope = json.loads(out.read_text())
         assert envelope["accounts"][0]["email"] == "a@example.com"
@@ -304,12 +304,12 @@ class TestSelectiveExport:
         _seed_account(s, 1, "a@example.com")
 
         with pytest.raises(TransferError, match="account not found"):
-            export_accounts(s, str(temp_home / "x.cswap"), account="999")
+            export_accounts(s, str(temp_home / "x.ccswap"), account="999")
 
     def test_export_no_accounts_raises(self, temp_home: Path):
         s = _linux_switcher(temp_home)
         with pytest.raises(TransferError, match="no accounts to export"):
-            export_accounts(s, str(temp_home / "x.cswap"))
+            export_accounts(s, str(temp_home / "x.ccswap"))
 
 
 # ---------------------------------------------------------------------------
@@ -321,7 +321,7 @@ class TestConflictPolicy:
     def test_skip_when_account_exists_without_force(self, temp_home: Path, capsys):
         src = _linux_switcher(temp_home)
         _seed_account(src, 1, "alice@example.com", "org-a")
-        out = temp_home / "b.cswap"
+        out = temp_home / "b.ccswap"
         export_accounts(src, str(out))
 
         # Re-import into the same home → should skip
@@ -345,7 +345,7 @@ class TestConflictPolicy:
         s = _linux_switcher(temp_home)
         _seed_account(s, 3, "alice@example.com", "org-a", "Org A")
         # Export alice while she's at slot 3 (so exported "number" = 3)
-        out = temp_home / "alice.cswap"
+        out = temp_home / "alice.ccswap"
         export_accounts(s, str(out), account="3")
         # Hand-edit envelope to claim slot 1 (simulates an export from another machine)
         env = json.loads(out.read_text())
@@ -395,14 +395,14 @@ class TestConflictPolicy:
         (temp_home / ".claude" / ".credentials.json").write_text(json.dumps(
             {"claudeAiOauth": {"accessToken": "sk-stale-live"}}
         ))
-        out = temp_home / "alice.cswap"
+        out = temp_home / "alice.ccswap"
         export_accounts(s, str(out))
 
         import_accounts(s, str(out), force=True)
 
         err = capsys.readouterr().err
         assert "alice@example.com is your current live login" in err
-        assert "cswap --switch-to 1 --force" in err
+        assert "ccswap --switch-to 1 --force" in err
 
     def test_import_without_matching_live_login_prints_no_hint(
         self, temp_home: Path, capsys
@@ -417,7 +417,7 @@ class TestConflictPolicy:
                 "accountUuid": "acct-bob",
             }
         }))
-        out = temp_home / "alice.cswap"
+        out = temp_home / "alice.ccswap"
         export_accounts(s, str(out))
 
         import_accounts(s, str(out), force=True)
@@ -435,7 +435,7 @@ class TestConflictPolicy:
             with patch.dict(os.environ, {"HOME": str(src_home)}):
                 src = _linux_switcher(src_home)
                 _seed_account(src, 1, "alice@example.com")
-                out = src_home / "a.cswap"
+                out = src_home / "a.ccswap"
                 export_accounts(src, str(out))
 
         # Destination already has bob at slot 1 (different account)
@@ -467,7 +467,7 @@ class TestCrossPlatform:
 
         _seed_account(mac_switcher, 1, "alice@example.com", "org-a")
 
-        out = temp_home / "x.cswap"
+        out = temp_home / "x.ccswap"
         export_accounts(mac_switcher, str(out))
 
         # Import into a Linux destination (file-based credentials)
@@ -515,7 +515,7 @@ class TestValidation:
     def test_path_traversal_email_rejected(self, temp_home: Path):
         s = _linux_switcher(temp_home)
         env = self._make_envelope(email="../../evil")
-        f = temp_home / "evil.cswap"
+        f = temp_home / "evil.ccswap"
         f.write_text(json.dumps(env))
 
         with pytest.raises(TransferError, match="invalid or missing email"):
@@ -528,7 +528,7 @@ class TestValidation:
     def test_negative_slot_number_rejected(self, temp_home: Path):
         s = _linux_switcher(temp_home)
         env = self._make_envelope(number=-1)
-        f = temp_home / "neg.cswap"
+        f = temp_home / "neg.ccswap"
         f.write_text(json.dumps(env))
 
         with pytest.raises(TransferError, match="invalid slot number"):
@@ -537,7 +537,7 @@ class TestValidation:
     def test_zero_slot_number_rejected(self, temp_home: Path):
         s = _linux_switcher(temp_home)
         env = self._make_envelope(number=0)
-        f = temp_home / "zero.cswap"
+        f = temp_home / "zero.ccswap"
         f.write_text(json.dumps(env))
 
         with pytest.raises(TransferError, match="invalid slot number"):
@@ -546,7 +546,7 @@ class TestValidation:
     def test_string_slot_number_rejected(self, temp_home: Path):
         s = _linux_switcher(temp_home)
         env = self._make_envelope(number="../")  # type: ignore[arg-type]
-        f = temp_home / "str.cswap"
+        f = temp_home / "str.ccswap"
         f.write_text(json.dumps(env))
 
         with pytest.raises(TransferError, match="invalid slot number"):
@@ -556,7 +556,7 @@ class TestValidation:
         s = _linux_switcher(temp_home)
         env = self._make_envelope()
         env.pop("version")
-        f = temp_home / "v.cswap"
+        f = temp_home / "v.ccswap"
         f.write_text(json.dumps(env))
 
         with pytest.raises(TransferError, match="unsupported export version"):
@@ -566,7 +566,7 @@ class TestValidation:
         s = _linux_switcher(temp_home)
         env = self._make_envelope()
         env["version"] = 2
-        f = temp_home / "v.cswap"
+        f = temp_home / "v.ccswap"
         f.write_text(json.dumps(env))
 
         with pytest.raises(TransferError, match="unsupported export version"):
@@ -576,7 +576,7 @@ class TestValidation:
         s = _linux_switcher(temp_home)
         env = self._make_envelope()
         env["encrypted"] = True
-        f = temp_home / "e.cswap"
+        f = temp_home / "e.ccswap"
         f.write_text(json.dumps(env))
 
         with pytest.raises(TransferError, match="encrypted exports are not supported"):
@@ -584,7 +584,7 @@ class TestValidation:
 
     def test_malformed_top_level_json_rejected(self, temp_home: Path):
         s = _linux_switcher(temp_home)
-        f = temp_home / "bad.cswap"
+        f = temp_home / "bad.ccswap"
         f.write_text("{not json")
 
         with pytest.raises(TransferError, match="not valid JSON"):
@@ -596,7 +596,7 @@ class TestValidation:
         s = _linux_switcher(temp_home)
         env = self._make_envelope()
         env["accounts"][0]["credentials"] = "a string"
-        f = temp_home / "c.cswap"
+        f = temp_home / "c.ccswap"
         f.write_text(json.dumps(env))
 
         with pytest.raises(TransferError, match="must be a raw sk-ant-api"):
@@ -607,7 +607,7 @@ class TestValidation:
         s = _linux_switcher(temp_home)
         env = self._make_envelope()
         env["accounts"][0]["credentials"] = [1, 2, 3]
-        f = temp_home / "c.cswap"
+        f = temp_home / "c.ccswap"
         f.write_text(json.dumps(env))
 
         with pytest.raises(TransferError, match="must be a JSON object"):
@@ -626,7 +626,7 @@ class TestValidation:
         s = _linux_switcher(temp_home)
         env = self._make_envelope()
         env["accounts"][0][field] = bad_value
-        f = temp_home / "bad.cswap"
+        f = temp_home / "bad.ccswap"
         f.write_text(json.dumps(env))
 
         with pytest.raises(TransferError, match=f"{field} for .* must be a string"):
@@ -639,7 +639,7 @@ class TestValidation:
     def test_missing_file_rejected(self, temp_home: Path):
         s = _linux_switcher(temp_home)
         with pytest.raises(TransferError, match="not found"):
-            import_accounts(s, str(temp_home / "nope.cswap"))
+            import_accounts(s, str(temp_home / "nope.ccswap"))
 
 
 # ---------------------------------------------------------------------------
@@ -705,7 +705,7 @@ class TestEmptyHome:
             with patch.dict(os.environ, {"HOME": str(src_home)}):
                 src = _linux_switcher(src_home)
                 _seed_account(src, 1, "alice@example.com")
-                out = src_home / "x.cswap"
+                out = src_home / "x.ccswap"
                 export_accounts(src, str(out))
 
         # Destination has no backup directory at all
@@ -735,7 +735,7 @@ class TestFilePermissions:
     def test_export_file_is_0600(self, temp_home: Path):
         s = _linux_switcher(temp_home)
         _seed_account(s, 1, "alice@example.com")
-        out = temp_home / "x.cswap"
+        out = temp_home / "x.ccswap"
         export_accounts(s, str(out))
 
         mode = os.stat(out).st_mode & 0o777
@@ -755,7 +755,7 @@ class TestFilePermissions:
         """
         s = _linux_switcher(temp_home)
         _seed_account(s, 1, "alice@example.com")
-        out = temp_home / "x.cswap"
+        out = temp_home / "x.ccswap"
 
         real_mkstemp = tempfile.mkstemp
         modes_at_creation = []
@@ -814,7 +814,7 @@ class TestValidateAllBeforeWrite:
                 },
             ],
         }
-        f = temp_home / "bad.cswap"
+        f = temp_home / "bad.ccswap"
         f.write_text(json.dumps(env))
 
         with pytest.raises(TransferError, match="invalid or missing email"):
@@ -862,7 +862,7 @@ class TestValidateAllBeforeWrite:
                 },
             ],
         }
-        f = temp_home / "dup.cswap"
+        f = temp_home / "dup.ccswap"
         f.write_text(json.dumps(env))
         with pytest.raises(TransferError, match="duplicate account"):
             import_accounts(s, str(f))
@@ -888,7 +888,7 @@ class TestCleanHomeActivation:
                 data = src._get_sequence_data()
                 data["activeAccountNumber"] = 2
                 src._write_json(src.sequence_file, data)
-                out = src_home / "backup.cswap"
+                out = src_home / "backup.ccswap"
                 export_accounts(src, str(out))
                 return out
 
@@ -1170,7 +1170,7 @@ class TestSlimVsFullConfig:
         s = _linux_switcher(temp_home)
         _seed_account(s, 1, "alice@example.com", "org-a", config=_BLOATED_CONFIG)
 
-        out = temp_home / "slim.cswap"
+        out = temp_home / "slim.ccswap"
         export_accounts(s, str(out))
         env = json.loads(out.read_text())
 
@@ -1187,7 +1187,7 @@ class TestSlimVsFullConfig:
         s = _linux_switcher(temp_home)
         _seed_account(s, 1, "alice@example.com", "org-a", config=_BLOATED_CONFIG)
 
-        out = temp_home / "full.cswap"
+        out = temp_home / "full.ccswap"
         export_accounts(s, str(out), full=True)
         env = json.loads(out.read_text())
 
@@ -1203,7 +1203,7 @@ class TestSlimVsFullConfig:
         )
 
         with pytest.raises(TransferError, match="missing oauthAccount"):
-            export_accounts(s, str(temp_home / "x.cswap"))
+            export_accounts(s, str(temp_home / "x.ccswap"))
 
     def test_slim_export_round_trip_to_fresh_machine(self, temp_home: Path):
         """End-to-end: bloated source config → slim export → import on
@@ -1217,7 +1217,7 @@ class TestSlimVsFullConfig:
                 _seed_account(
                     src, 1, "alice@example.com", "org-a", config=_BLOATED_CONFIG
                 )
-                export_path = src_home / "x.cswap"
+                export_path = src_home / "x.ccswap"
                 export_accounts(src, str(export_path))
 
         dst_home = temp_home.parent / "dst"
@@ -1257,7 +1257,7 @@ class TestSlimVsFullCredentials:
             s, 1, "alice@example.com", "org-a", creds=self._SIBLINGED_CREDS
         )
 
-        out = temp_home / "slim.cswap"
+        out = temp_home / "slim.ccswap"
         export_accounts(s, str(out))
         env = json.loads(out.read_text())
 
@@ -1271,7 +1271,7 @@ class TestSlimVsFullCredentials:
             s, 1, "alice@example.com", "org-a", creds=self._SIBLINGED_CREDS
         )
 
-        out = temp_home / "full.cswap"
+        out = temp_home / "full.ccswap"
         export_accounts(s, str(out), full=True)
         env = json.loads(out.read_text())
 
@@ -1286,7 +1286,7 @@ class TestSlimVsFullCredentials:
         s = _linux_switcher(temp_home)
         _seed_account(s, 1, "alice@example.com", "org-a", creds=legacy)
 
-        out = temp_home / "legacy.cswap"
+        out = temp_home / "legacy.ccswap"
         export_accounts(s, str(out))
         env = json.loads(out.read_text())
 
@@ -1325,7 +1325,7 @@ class TestExportSkipsBrokenSlots:
         _seed_account(s, 2, "bob@example.com")
         self._break_credentials(s, 1, "alice@example.com")
 
-        out = temp_home / "backup.cswap"
+        out = temp_home / "backup.ccswap"
         export_accounts(s, str(out))
 
         envelope = json.loads(out.read_text())
@@ -1346,7 +1346,7 @@ class TestExportSkipsBrokenSlots:
         _seed_account(s, 2, "bob@example.com")
         self._break_config(s, 1, "alice@example.com")
 
-        out = temp_home / "backup.cswap"
+        out = temp_home / "backup.ccswap"
         export_accounts(s, str(out))
 
         envelope = json.loads(out.read_text())
@@ -1365,7 +1365,7 @@ class TestExportSkipsBrokenSlots:
 
         with pytest.raises(CredentialReadError, match="no backup credentials"):
             export_accounts(
-                s, str(temp_home / "x.cswap"), account="1"
+                s, str(temp_home / "x.ccswap"), account="1"
             )
 
     def test_explicit_account_with_missing_config_hard_fails(
@@ -1380,7 +1380,7 @@ class TestExportSkipsBrokenSlots:
 
         with pytest.raises(ConfigError, match="no backup config"):
             export_accounts(
-                s, str(temp_home / "x.cswap"), account="1"
+                s, str(temp_home / "x.ccswap"), account="1"
             )
 
     def test_all_slots_broken_raises_transfer_error(self, temp_home: Path):
@@ -1391,7 +1391,7 @@ class TestExportSkipsBrokenSlots:
         self._break_credentials(s, 2, "bob@example.com")
 
         with pytest.raises(TransferError, match="no exportable accounts"):
-            export_accounts(s, str(temp_home / "x.cswap"))
+            export_accounts(s, str(temp_home / "x.ccswap"))
 
     def test_skipped_active_slot_clears_envelope_active(
         self, temp_home: Path, capsys
@@ -1411,7 +1411,7 @@ class TestExportSkipsBrokenSlots:
 
         # No live session — _get_current_account() returns None, so the
         # broken slot 1 is not rescued via live read.
-        out = temp_home / "backup.cswap"
+        out = temp_home / "backup.ccswap"
         export_accounts(s, str(out))
 
         envelope = json.loads(out.read_text())
@@ -1421,7 +1421,7 @@ class TestExportSkipsBrokenSlots:
     def test_stdout_pipe_mode_keeps_stdout_pure_json(
         self, temp_home: Path, capsys
     ):
-        """cswap --export - must produce valid JSON on stdout even when one
+        """ccswap --export - must produce valid JSON on stdout even when one
         slot is broken — warning must go to stderr."""
         s = _linux_switcher(temp_home)
         _seed_account(s, 1, "alice@example.com")
@@ -1445,7 +1445,7 @@ class TestExportSkipsBrokenSlots:
 
 class TestImportSessionInvalidation:
     def _reexport_with_marker(self, s, temp_home: Path) -> Path:
-        out = temp_home / "alice.cswap"
+        out = temp_home / "alice.ccswap"
         export_accounts(s, str(out), account="1")
         env = json.loads(out.read_text())
         env["accounts"][0]["credentials"]["_marker"] = "NEW"
@@ -1468,7 +1468,7 @@ class TestImportSessionInvalidation:
 
         import_accounts(s, str(out), force=True)
 
-        # Credential material dropped → next `cswap run` re-bootstraps from
+        # Credential material dropped → next `ccswap run` re-bootstraps from
         # the imported backup; profile history (.claude.json) survives.
         assert not (session_dir / ".credentials.json").exists()
         assert (session_dir / ".claude.json").exists()
@@ -1519,7 +1519,7 @@ class TestImportClearsDeadTokenQuarantine:
         s._usage_store.record({"2": FetchRecord(error="invalid_grant")}, ident)
         assert s._usage_store.entries(ident)["2"].token_dead()
 
-        out = temp_home / "bob.cswap"
+        out = temp_home / "bob.ccswap"
         export_accounts(s, str(out), account="2")
         env = json.loads(out.read_text())
         env["accounts"][0]["credentials"]["_marker"] = "BOB_NEW"
@@ -1559,7 +1559,7 @@ class TestImportClearsDeadTokenQuarantine:
         assert entry.struck_fingerprint == fp, "premise: strike is fp-bound"
         assert entry.token_dead(stored_fp=fp), "premise: verdict holds"
 
-        out = temp_home / "bob.cswap"
+        out = temp_home / "bob.ccswap"
         export_accounts(s, str(out), account="2")
         # No envelope mutation: re-import exactly the condemned generation.
         import_accounts(s, str(out), force=True)
@@ -1572,7 +1572,7 @@ class TestImportClearsDeadTokenQuarantine:
     def test_reimport_after_removal_lifts_orphan_quarantine(
         self, temp_home: Path, capsys
     ):
-        """The case the overwrite-only fix would miss: `cswap remove` never
+        """The case the overwrite-only fix would miss: `ccswap remove` never
         prunes usage.json, so re-importing a removed identity into the same
         slot is classified `imported` yet inherits the orphan dead-token row.
         A plain import (no --force) must still clear it."""
@@ -1582,10 +1582,10 @@ class TestImportClearsDeadTokenQuarantine:
         s._usage_store.record({"2": FetchRecord(error="invalid_grant")}, ident)
         assert s._usage_store.entries(ident)["2"].token_dead()
 
-        out = temp_home / "bob.cswap"
+        out = temp_home / "bob.ccswap"
         export_accounts(s, str(out), account="2")
 
-        # Simulate `cswap remove 2`: drop the sequence entry, leave the
+        # Simulate `ccswap remove 2`: drop the sequence entry, leave the
         # usage.json row behind (removal doesn't prune the usage store).
         data = s._get_sequence_data()
         del data["accounts"]["2"]
@@ -1617,7 +1617,7 @@ class TestImportClearsDeadTokenQuarantine:
         s._usage_store.record({"2": FetchRecord(error="invalid_grant")}, ident)
         assert s._usage_store.entries(ident)["2"].token_dead()
 
-        out = temp_home / "bob.cswap"
+        out = temp_home / "bob.ccswap"
         export_accounts(s, str(out), account="2")
         env = json.loads(out.read_text())
         env["accounts"][0]["credentials"]["_marker"] = "BOB_HEALED"
@@ -1673,7 +1673,7 @@ class TestImportClearsDeadTokenQuarantine:
         ), "premise: bound to the stored generation, the strike is healed"
         assert not s._slot_token_dead("2", "bob@example.com")
 
-        out = temp_home / "bob.cswap"
+        out = temp_home / "bob.ccswap"
         export_accounts(s, str(out), account="2")
         env = json.loads(out.read_text())
         env["accounts"][0]["credentials"]["_marker"] = "BOB_OVERWRITTEN"
@@ -1701,7 +1701,7 @@ class TestImportClearsDeadTokenQuarantine:
         account whose row carries a real org — which is all of them, checked on
         the live store: three slots, three non-empty uuids — the lookup returns
         nothing, token_dead() is False, and the import auto-heal it feeds never
-        fires. The slot the user was told to fix with `cswap import` gets
+        fires. The slot the user was told to fix with `ccswap import` gets
         "already exists, use --force" instead.
 
         The previous shape passed entry["org_uuid"] straight through, so this
@@ -1733,7 +1733,7 @@ class TestImportClearsDeadTokenQuarantine:
         The import heal compares only against the backup. So when the strike is
         bound to the LIVE generation and the backup has since moved, the
         collectors correctly read the slot as quarantined while the import
-        reads it as healthy and refuses to replace it — and `cswap import` is
+        reads it as healthy and refuses to replace it — and `ccswap import` is
         exactly what the "re-login needed" message tells the user to run.
         """
         from claude_swap import oauth
@@ -1770,7 +1770,7 @@ class TestImportClearsDeadTokenQuarantine:
             ident,
         )
 
-        out = temp_home / "bob.cswap"
+        out = temp_home / "bob.ccswap"
         export_accounts(s, str(out), account="2")
         env = json.loads(out.read_text())
         env["accounts"][0]["credentials"]["_marker"] = "BOB_HEALED"
@@ -1798,7 +1798,7 @@ class TestImportClearsDeadTokenQuarantine:
         s = _linux_switcher(temp_home)
         _seed_account(s, 2, "bob@example.com")
 
-        out = temp_home / "bob.cswap"
+        out = temp_home / "bob.ccswap"
         export_accounts(s, str(out), account="2")
         env = json.loads(out.read_text())
         env["accounts"][0]["credentials"]["_marker"] = "BOB_NEW"
@@ -1833,7 +1833,7 @@ class TestImportClearsDeadTokenQuarantine:
             {"2": ("bob@example.com", "")}
         )["2"].token_dead()
 
-        out = temp_home / "bob.cswap"
+        out = temp_home / "bob.ccswap"
         export_accounts(s, str(out), account="2")
         env = json.loads(out.read_text())
         env["accounts"][0]["credentials"]["_marker"] = "BOB_NEW"
@@ -1852,7 +1852,7 @@ class TestImportClearsDeadTokenQuarantine:
     ):
         """The heal path rewrites stored creds like --force does, so it must
         hit the same live-session warning: a running session-mode instance
-        keeps its own credential copy until restarted via `cswap run`."""
+        keeps its own credential copy until restarted via `ccswap run`."""
         import os as _os
 
         from claude_swap.session import session_dir_for
@@ -1862,7 +1862,7 @@ class TestImportClearsDeadTokenQuarantine:
         ident = {"2": ("bob@example.com", "")}
         s._usage_store.record({"2": FetchRecord(error="invalid_grant")}, ident)
 
-        out = temp_home / "bob.cswap"
+        out = temp_home / "bob.ccswap"
         export_accounts(s, str(out), account="2")
 
         session_dir = session_dir_for(s.backup_dir, "2", "bob@example.com")
@@ -1887,7 +1887,7 @@ class TestImportClearsDeadTokenQuarantine:
         the clear call is harmless and never quarantines the newcomer."""
         src = _linux_switcher(temp_home)
         _seed_account(src, 2, "bob@example.com")
-        out = temp_home / "bob.cswap"
+        out = temp_home / "bob.ccswap"
         export_accounts(src, str(out), account="2")
 
         dst_home = temp_home.parent / "dst_fresh"
@@ -1933,7 +1933,7 @@ class TestForceOverwriteNarratesTheStrikeClear:
             {"2": FetchRecord(error="invalid_grant", struck_fp=fp)}, ident
         )
 
-        out = temp_home / "bob.cswap"
+        out = temp_home / "bob.ccswap"
         export_accounts(s, str(out), account="2")
         import_accounts(s, str(out), force=True)
 
@@ -1957,7 +1957,7 @@ class TestForceOverwriteNarratesTheStrikeClear:
             {"2": FetchRecord(error="invalid_grant", struck_fp=fp)}, ident
         )
 
-        out = temp_home / "bob.cswap"
+        out = temp_home / "bob.ccswap"
         export_accounts(s, str(out), account="2")
         env = json.loads(out.read_text())
         env["accounts"][0]["credentials"]["refreshToken"] = "rtok-2-rotated"
@@ -1982,7 +1982,7 @@ class TestForceOverwriteNarratesTheStrikeClear:
             {"2": ("bob@example.com", "")},
         )
 
-        out = temp_home / "both.cswap"
+        out = temp_home / "both.ccswap"
         export_accounts(s, str(out))
         import_accounts(s, str(out), force=True)
 
@@ -2013,7 +2013,7 @@ class TestForceOverwriteNarratesTheStrikeClear:
             {"2": FetchRecord(error="no_refresh_token", struck_fp=fp)}, ident
         )
 
-        out = temp_home / "bob.cswap"
+        out = temp_home / "bob.ccswap"
         export_accounts(s, str(out), account="2")
         import_accounts(s, str(out), force=True)
 
