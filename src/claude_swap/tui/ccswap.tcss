@@ -1,5 +1,5 @@
 /* claude-swap TUI — flat, low-chrome dark layout.
-   Colors come from the registered "cswap-dark" theme (theme.py); this file
+   Colors come from the registered "ccswap-dark" theme (theme.py); this file
    only handles layout, spacing, and the few component states. */
 
 Screen {
@@ -66,6 +66,14 @@ Screen {
 
 MenuItem Static { color: $foreground; }
 MenuItem Static.menu-item-muted { color: $secondary; }
+
+/* provider group header rows in the switch / watch lists (never highlighted) */
+#accounts SectionItem {
+    height: 1;
+    margin-bottom: 1;
+    border-left: thick $background;
+}
+#accounts SectionItem Static.section-label { color: $secondary; text-style: bold; }
 
 /* -- switch / watch screens --------------------------------------------------- */
 

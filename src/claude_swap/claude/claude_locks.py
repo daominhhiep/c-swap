@@ -161,7 +161,7 @@ def claude_credentials_lock(*, timeout: float | None = None):
     2.1.218 takes ``<config-home>/.oauth_refresh.lock`` first, then the
     legacy ``~/.claude.lock``; on legacy contention it releases the primary
     before retrying. Mirroring both the pair and the order means a waiting
-    cswap and a waiting Claude Code can never deadlock against each other,
+    ccswap and a waiting Claude Code can never deadlock against each other,
     and exclusion holds even after CC drops the legacy lock. Both use CC's
     60s staleness — never steal a lock a live CC may still hold.
     """

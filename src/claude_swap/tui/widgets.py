@@ -17,7 +17,7 @@ from textual.widgets import ListItem, Static
 from claude_swap import pace
 from claude_swap.json_output import USAGE_API_KEY
 from claude_swap.models import AccountSnapshot
-from claude_swap.switcher import ERROR_NOTES
+from claude_swap.claude.switcher import ERROR_NOTES
 from claude_swap.usage_store import STALE_OK_S
 from claude_swap.tui import data
 from claude_swap.tui.theme import Palette
@@ -193,7 +193,7 @@ def account_card_text(
         style = palette.muted if sentinel == USAGE_API_KEY else palette.sev_warn
         marker = "·" if sentinel == USAGE_API_KEY else "⚠"
         text.append(f"{marker} {data.sentinel_label(sentinel)}", style=style)
-        # Same supplementary line `cswap list` prints: the last good
+        # Same supplementary line `ccswap list` prints: the last good
         # measurement behind the sentinel (API-key accounts have no quota to
         # have "seen").
         if sentinel != USAGE_API_KEY:
@@ -317,25 +317,15 @@ class AccountsPanel(Static):
 
     def on_mount(self) -> None:
         self.watch(self.app, "snapshot", lambda _snap: self.refresh(layout=True))
+        self.watch(self.app, "codex_snapshot", lambda _snap: self.refresh(layout=True))
         self.watch(self.app, "theme", lambda _t: self.refresh(layout=True))
 
-    def render(self) -> Text:
+    def _blocks(
+        self, accounts, width: int, now: float, palette: Palette
+    ) -> list[Text]:
         app: "CswapApp" = self.app  # type: ignore[assignment]
-        palette = Palette.from_theme(app.current_theme)
-        snap = app.snapshot
-        if snap is None:
-            return Text("loading…", style=palette.muted)
-        if not snap.accounts:
-            return Text(
-                "No managed accounts yet.\n"
-                "Use the menu below: Add account — from your current "
-                "Claude Code login, or from a setup-token / API key.",
-                style=palette.muted,
-            )
-        now = time.time()
-        width = (self.size.width or 80) - 2
         blocks: list[Text] = []
-        for acc in snap.accounts:
+        for acc in accounts:
             if acc.is_active:
                 blocks.append(
                     account_card_text(
@@ -345,6 +335,35 @@ class AccountsPanel(Static):
                 )
             elif self._show_minis:
                 blocks.append(mini_account_text(acc, now, palette=palette))
+        return blocks
+
+    def render(self) -> Text:
+        app: "CswapApp" = self.app  # type: ignore[assignment]
+        palette = Palette.from_theme(app.current_theme)
+        snap = app.snapshot
+        if snap is None:
+            return Text("loading…", style=palette.muted)
+        codex = app.codex_snapshot
+        codex_accounts = codex.accounts if codex is not None else ()
+        if not snap.accounts and not codex_accounts:
+            return Text(
+                "No managed accounts yet.\n"
+                "Use the menu below: Add account — from your current "
+                "Claude Code or Codex CLI login, or from a setup-token / API key.",
+                style=palette.muted,
+            )
+        now = time.time()
+        width = (self.size.width or 80) - 2
+        blocks = self._blocks(snap.accounts, width, now, palette)
+        if codex_accounts:
+            # Two groups on screen: label both so the slot numbers (which
+            # repeat across providers) cannot be misread.
+            codex_blocks = self._blocks(codex_accounts, width, now, palette)
+            if blocks:
+                blocks.insert(0, section_text("Claude", palette))
+            if codex_blocks:
+                blocks.append(section_text("Codex", palette))
+                blocks.extend(codex_blocks)
         if not blocks:
             return Text("no active managed login", style=palette.muted)
         text = Text()
@@ -378,18 +397,37 @@ class AccountCard(Static):
         )
 
 
+def section_text(label: str, palette: Palette) -> Text:
+    """A group header line (``── Codex ──``) separating providers."""
+    return Text(f"── {label} ──", style=f"bold {palette.muted}")
+
+
 class AccountItem(ListItem):
-    """ListView row wrapping an :class:`AccountCard`; remembers its slot."""
+    """ListView row wrapping an :class:`AccountCard`; remembers its slot
+    (and provider, since slot numbers repeat across providers)."""
 
     def __init__(self, acc: AccountSnapshot) -> None:
         super().__init__(AccountCard(acc))
         self.number = acc.number
         self.email = acc.email
+        self.provider = acc.provider
+        self.key = acc.key
 
     def set_account(self, acc: AccountSnapshot) -> None:
         self.number = acc.number
         self.email = acc.email
+        self.provider = acc.provider
+        self.key = acc.key
         self.query_one(AccountCard).set_account(acc)
+
+
+class SectionItem(ListItem):
+    """A non-selectable group header row in an account list. Disabled, so
+    the ListView cursor skips over it."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(Static(f"── {label} ──", classes="section-label"), disabled=True)
+        self.label = label
 
 
 class MenuItem(ListItem):

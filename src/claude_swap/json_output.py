@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from claude_swap import oauth, pace
+from claude_swap import pace
+
+from claude_swap.claude import oauth
 
 # Bump only on a breaking change to any payload shape. Scripts key off this.
 SCHEMA_VERSION = 1
@@ -28,7 +30,7 @@ USAGE_API_KEY = "api key"
 # isn't misled into an unnecessary re-login.
 USAGE_KEYCHAIN_UNAVAILABLE = "keychain unavailable"
 # The stored refresh-token lineage is dead (repeated ``invalid_grant``). The
-# account is quarantined from fetching until a re-login (``cswap login`` / ``add``)
+# account is quarantined from fetching until a re-login (``ccswap login`` / ``add``)
 # replaces the credential; distinct from "token expired" (which Claude Code can
 # refresh on its own) because only the user can fix it.
 USAGE_RELOGIN_REQUIRED = "re-login needed"

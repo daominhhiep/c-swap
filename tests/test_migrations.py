@@ -1,8 +1,8 @@
-"""Tests for one-time data migrations (claude_swap.migrations).
+"""Tests for one-time data migrations (claude_swap.claude.migrations).
 
 The headline migration relocates Windows backup credentials from Credential
 Manager (keyring) to base64 files. Since ``migrations.py`` does ``import
-keyring`` locally, patching ``claude_swap.switcher.keyring`` would NOT affect
+keyring`` locally, patching ``claude_swap.claude.switcher.keyring`` would NOT affect
 it — these tests inject a fake ``keyring`` module via ``sys.modules`` so the
 migration's own import picks it up.
 """
@@ -16,12 +16,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from claude_swap import migrations
+from claude_swap.claude import migrations
 from claude_swap.exceptions import MigrationIncomplete
-from claude_swap.macos_keychain import KeychainError
-from claude_swap.migrations import run_migrations
+from claude_swap.claude.macos_keychain import KeychainError
+from claude_swap.claude.migrations import run_migrations
 from claude_swap.models import Platform
-from claude_swap.switcher import KEYRING_SERVICE, ClaudeAccountSwitcher
+from claude_swap.claude.switcher import KEYRING_SERVICE, ClaudeAccountSwitcher
 
 
 # ---------------------------------------------------------------------------
@@ -376,7 +376,7 @@ class TestWindowsFileBackend:
         switcher = _make_windows_switcher(temp_home)
         assert switcher._uses_file_backup_backend() is True
 
-        with patch("claude_swap.switcher.keyring", create=True) as mock_keyring:
+        with patch("claude_swap.claude.switcher.keyring", create=True) as mock_keyring:
             switcher._write_account_credentials("1", "a@example.com", "secret")
             assert switcher._read_account_credentials("1", "a@example.com") == "secret"
             switcher._delete_account_credentials("1", "a@example.com")

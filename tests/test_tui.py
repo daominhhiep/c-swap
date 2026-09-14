@@ -19,10 +19,10 @@ from pathlib import Path
 
 import pytest
 
-from claude_swap.autoswitch import NoSwitchEvent, SwitchEvent
+from claude_swap.claude.autoswitch import NoSwitchEvent, SwitchEvent
 from claude_swap.json_output import USAGE_API_KEY, USAGE_TOKEN_EXPIRED
 from claude_swap.models import AccountSnapshot, AccountsSnapshot
-from claude_swap.switcher import ClaudeAccountSwitcher
+from claude_swap.claude.switcher import ClaudeAccountSwitcher
 from claude_swap.tui import data as tui_data
 from claude_swap.usage_store import UsageEntry
 
@@ -81,6 +81,7 @@ def make_account(
     email: str | None = None,
     alias: str = "",
     disabled: bool = False,
+    provider: str = "claude",
 ) -> AccountSnapshot:
     return AccountSnapshot(
         number=str(number),
@@ -93,7 +94,13 @@ def make_account(
         usage=entry if entry is not None else make_entry(),
         alias=alias,
         disabled=disabled,
+        provider=provider,
     )
+
+
+def make_codex_account(number: int | str, **kw) -> AccountSnapshot:
+    kw.setdefault("email", f"codex{number}@example.com")
+    return make_account(number, kind="chatgpt", provider="codex", **kw)
 
 
 def make_usage_at(
@@ -238,10 +245,10 @@ class BlockingSnapshotSwitcher(FakeSwitcher):
         )
 
 
-def make_app(fake: FakeSwitcher):
+def make_app(fake: FakeSwitcher, codex: FakeSwitcher | None = None):
     from claude_swap.tui.app import CswapApp
 
-    return CswapApp(fake)
+    return CswapApp(fake, codex_switcher=codex)
 
 
 async def settle(pilot) -> None:
@@ -299,14 +306,14 @@ class TestFormatting:
         assert tui_data.format_age(400) == "· 6m ago"
 
     def test_sentinel_labels_match_cswap_list(self):
-        # The TUI must describe sentinel states with the exact wording `cswap
+        # The TUI must describe sentinel states with the exact wording `ccswap
         # list` prints — owned-and-expired means Claude Code refreshes the
         # active account, not that the user must re-login.
         assert (
             tui_data.sentinel_label(USAGE_TOKEN_EXPIRED)
             == "token expired — refresh deferred this pass; retries automatically"
         )
-        from claude_swap.switcher import SENTINEL_NOTES
+        from claude_swap.claude.switcher import SENTINEL_NOTES
 
         for sentinel, note in SENTINEL_NOTES.items():
             assert tui_data.sentinel_label(sentinel) == note
@@ -314,7 +321,7 @@ class TestFormatting:
 
     def test_sentinel_card_shows_last_seen_like_cswap_list(self):
         # A sentinel is a live overlay — the entry can still carry the last
-        # good measurement, and `cswap list` prints it as a "last seen" line.
+        # good measurement, and `ccswap list` prints it as a "last seen" line.
         # The card must too (except for API-key accounts, which have no quota).
         from claude_swap.tui.widgets import account_card_text
 
@@ -394,7 +401,7 @@ class TestSnapshotSource:
 
     def test_every_pass_is_store_governed(self, tmp_path):
         # Pacing lives in the usage store (poll plans + freshness + atomic
-        # reservation), so every take is the same on-demand pass `cswap list`
+        # reservation), so every take is the same on-demand pass `ccswap list`
         # runs — including the user's explicit refresh, which cannot bypass
         # the store's per-account cadence.
         fake, source = self._source(tmp_path)
@@ -1599,11 +1606,12 @@ class TestBareInvocation:
 
         launched = {}
 
-        def fake_run(switcher):
+        def fake_run(switcher, codex_switcher=None):
             launched["switcher"] = switcher
+            launched["codex_switcher"] = codex_switcher
             return 0
 
-        monkeypatch.setattr(sys, "argv", ["cswap"])
+        monkeypatch.setattr(sys, "argv", ["ccswap"])
         monkeypatch.setattr(sys.stdout, "isatty", lambda: True)
         monkeypatch.setattr(sys.stdin, "isatty", lambda: True)
         monkeypatch.setattr(tui, "run", fake_run)
@@ -1611,11 +1619,15 @@ class TestBareInvocation:
             cli.main()
         assert excinfo.value.code == 0
         assert "switcher" in launched
+        # The dashboard also gets the Codex group (built best-effort).
+        from claude_swap.codex.switcher import CodexAccountSwitcher
+
+        assert isinstance(launched["codex_switcher"], CodexAccountSwitcher)
 
     def test_bare_non_tty_keeps_usage_error(self, monkeypatch, temp_home):
         import claude_swap.cli as cli
 
-        monkeypatch.setattr(sys, "argv", ["cswap"])
+        monkeypatch.setattr(sys, "argv", ["ccswap"])
         monkeypatch.setattr(sys.stdout, "isatty", lambda: False)
         monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
         with pytest.raises(SystemExit) as excinfo:
@@ -1628,11 +1640,11 @@ class TestBareInvocation:
 
         launched = {}
 
-        def fake_run(switcher, start="dashboard"):
+        def fake_run(switcher, start="dashboard", codex_switcher=None):
             launched["start"] = start
             return 0
 
-        monkeypatch.setattr(sys, "argv", ["cswap", "watch"])
+        monkeypatch.setattr(sys, "argv", ["ccswap", "watch"])
         monkeypatch.setattr(tui, "run", fake_run)
         with pytest.raises(SystemExit) as excinfo:
             cli.main()
@@ -1653,7 +1665,7 @@ class TestThemeWiring:
         app = make_app(fake)
         async with app.run_test() as pilot:
             await settle(pilot)
-            assert app.theme == "cswap-light"
+            assert app.theme == "ccswap-light"
 
     async def test_auto_setting_uses_detected_light(self, tmp_path):
         (tmp_path / "settings.json").write_text(json.dumps({"ui": {"theme": "auto"}}))
@@ -1662,7 +1674,7 @@ class TestThemeWiring:
         app = CswapApp(fake, detected="light")
         async with app.run_test() as pilot:
             await settle(pilot)
-            assert app.theme == "cswap-light"
+            assert app.theme == "ccswap-light"
 
     async def test_auto_setting_no_detection_falls_back_to_dark(self, tmp_path):
         (tmp_path / "settings.json").write_text(json.dumps({"ui": {"theme": "auto"}}))
@@ -1671,7 +1683,7 @@ class TestThemeWiring:
         app = CswapApp(fake, detected=None)
         async with app.run_test() as pilot:
             await settle(pilot)
-            assert app.theme == "cswap-dark"
+            assert app.theme == "ccswap-dark"
 
     async def test_toggle_cycles_dark_light_auto(self, tmp_path):
         (tmp_path / "settings.json").write_text(json.dumps({"ui": {"theme": "dark"}}))
@@ -1680,14 +1692,14 @@ class TestThemeWiring:
         app = CswapApp(fake, detected="light")
         async with app.run_test() as pilot:
             await settle(pilot)
-            assert app.theme == "cswap-dark"          # setting dark
+            assert app.theme == "ccswap-dark"          # setting dark
             app.action_toggle_theme(); await pilot.pause()
-            assert app.theme == "cswap-light"          # → light
+            assert app.theme == "ccswap-light"          # → light
             app.action_toggle_theme(); await pilot.pause()
-            assert app.theme == "cswap-light"          # → auto, detected=light
+            assert app.theme == "ccswap-light"          # → auto, detected=light
             assert json.loads((tmp_path / "settings.json").read_text())["ui"]["theme"] == "auto"
             app.action_toggle_theme(); await pilot.pause()
-            assert app.theme == "cswap-dark"           # → back to dark
+            assert app.theme == "ccswap-dark"           # → back to dark
 
     async def test_theme_menu_marks_current_and_applies(self, tmp_path):
         from textual.widgets import ListView, Static
@@ -1708,5 +1720,167 @@ class TestThemeWiring:
             assert "●" in current  # the current theme is marked
             await menu_select(pilot, "theme:light")
             assert app._theme_name == "light"
-            assert app.theme == "cswap-light"
+            assert app.theme == "ccswap-light"
 
+
+
+
+# ---------------------------------------------------------------------------
+# Codex accounts as a second group
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestCodexGroup:
+    def _fakes(self, tmp_path):
+        claude = FakeSwitcher([make_account(1, active=True), make_account(2)], tmp_path)
+        codex = FakeSwitcher(
+            [make_codex_account(1, entry=make_entry(15.0, 30.0)),
+             make_codex_account(2, active=True, entry=make_entry(80.0, 40.0))],
+            tmp_path / "codex",
+        )
+        return claude, codex
+
+    async def test_panel_shows_both_groups(self, tmp_path):
+        claude, codex = self._fakes(tmp_path)
+        app = make_app(claude, codex)
+        async with app.run_test(size=(100, 40)) as pilot:
+            await settle(pilot)
+            from claude_swap.tui.widgets import AccountsPanel
+
+            panel = app.screen.query_one(AccountsPanel).render().plain
+            assert "── Claude ──" in panel and "── Codex ──" in panel
+            assert panel.index("── Claude ──") < panel.index("user1@example.com")
+            assert panel.index("── Codex ──") < panel.index("codex2@example.com")
+            # both active cards are full-size (they carry reset countdowns)
+            assert panel.count("● active") == 2
+            assert "80%" in panel and "15%" in panel
+
+    async def test_no_codex_switcher_renders_as_before(self, tmp_path):
+        claude, _ = self._fakes(tmp_path)
+        app = make_app(claude)
+        async with app.run_test(size=(100, 40)) as pilot:
+            await settle(pilot)
+            from claude_swap.tui.widgets import AccountsPanel
+
+            panel = app.screen.query_one(AccountsPanel).render().plain
+            assert "── Claude ──" not in panel and "── Codex ──" not in panel
+            assert app.codex_snapshot is None
+            await menu_select(pilot, "add-menu")
+            from textual.widgets import ListView
+
+            from claude_swap.tui.widgets import MenuItem
+
+            ids = [it.action_id for it in app.screen.query_one("#menu", ListView).query(MenuItem)]
+            assert "add-codex" not in ids
+
+    async def test_switch_screen_groups_and_enter_switches_codex(self, tmp_path):
+        claude, codex = self._fakes(tmp_path)
+        app = make_app(claude, codex)
+        async with app.run_test(size=(100, 60)) as pilot:
+            await settle(pilot)
+            await pilot.press("s")
+            await pilot.pause()
+            from textual.widgets import ListView
+
+            from claude_swap.tui.dashboard import DashboardScreen, SwitchScreen
+            from claude_swap.tui.widgets import AccountItem, SectionItem
+
+            assert isinstance(app.screen, SwitchScreen)
+            listview = app.screen.query_one("#accounts", ListView)
+            rows = list(listview.children)
+            kinds = [
+                ("section", r.label) if isinstance(r, SectionItem) else (r.provider, r.number)
+                for r in rows
+            ]
+            assert kinds == [
+                ("claude", "1"), ("claude", "2"), ("section", "Codex"),
+                ("codex", "1"), ("codex", "2"),
+            ]
+            assert listview.index == 0  # the active Claude account
+            # down, down: the section row is skipped, landing on Codex 1
+            await pilot.press("down", "down")
+            await pilot.pause()
+            assert isinstance(rows[listview.index], AccountItem)
+            assert (rows[listview.index].provider, rows[listview.index].number) == ("codex", "1")
+            await pilot.press("enter")
+            await settle(pilot)
+            assert ("switch_to", "1") in codex.calls
+            assert not any(c[0] == "switch_to" for c in claude.calls)
+            assert isinstance(app.screen, DashboardScreen)
+            assert app.codex_snapshot.active_number == "1"
+
+    async def test_watch_screen_lists_codex_rows(self, tmp_path):
+        claude, codex = self._fakes(tmp_path)
+        app = make_app(claude, codex)
+        async with app.run_test(size=(100, 60)) as pilot:
+            await settle(pilot)
+            await pilot.press("w")
+            await pilot.pause()
+            from textual.widgets import ListView
+
+            from claude_swap.tui.widgets import AccountItem
+
+            listview = app.screen.query_one("#accounts", ListView)
+            keys = [it.key for it in listview.query(AccountItem)]
+            assert keys == ["claude:1", "claude:2", "codex:1", "codex:2"]
+
+    async def test_remove_menu_lists_codex_and_confirms(self, tmp_path):
+        claude, codex = self._fakes(tmp_path)
+        app = make_app(claude, codex)
+        async with app.run_test(size=(100, 40)) as pilot:
+            await settle(pilot)
+            await menu_select(pilot, "remove-menu")
+            from textual.widgets import ListView, Static
+
+            from claude_swap.tui.widgets import MenuItem
+
+            menu = app.screen.query_one("#menu", ListView)
+            items = list(menu.query(MenuItem))
+            ids = [it.action_id for it in items]
+            assert ids[:4] == ["remove:1", "remove:2", "remove:codex:1", "remove:codex:2"]
+            label = next(
+                it.query_one(Static).render().plain
+                for it in items if it.action_id == "remove:codex:1"
+            )
+            assert label.startswith("Codex 1")
+            await menu_select(pilot, "remove:codex:1")
+            from claude_swap.tui.modals import ConfirmModal
+
+            assert isinstance(app.screen, ConfirmModal)
+            await pilot.press("y")
+            await settle(pilot)
+            assert ("remove", "1", True) in codex.calls
+            assert not any(c[0] == "remove" for c in claude.calls)
+
+    async def test_add_codex_login_via_menu(self, tmp_path):
+        claude, codex = self._fakes(tmp_path)
+        app = make_app(claude, codex)
+        async with app.run_test(size=(100, 40)) as pilot:
+            await settle(pilot)
+            await menu_select(pilot, "add-menu")
+            await menu_select(pilot, "add-codex")
+            from claude_swap.tui.modals import ConfirmModal
+
+            assert isinstance(app.screen, ConfirmModal)
+            await pilot.press("y")
+            await settle(pilot)
+            assert ("add", None, False) in codex.calls
+            assert not any(c[0] == "add" for c in claude.calls)
+
+    async def test_codex_failure_keeps_claude_view(self, tmp_path):
+        claude, codex = self._fakes(tmp_path)
+
+        def boom(fetch=None):
+            raise RuntimeError("codex exploded")
+
+        codex.accounts_snapshot = boom
+        app = make_app(claude, codex)
+        async with app.run_test(size=(100, 40)) as pilot:
+            await settle(pilot)
+            assert app.snapshot is not None and len(app.snapshot.accounts) == 2
+            assert app.codex_snapshot is None
+            from claude_swap.tui.widgets import AccountsPanel
+
+            panel = app.screen.query_one(AccountsPanel).render().plain
+            assert "user1@example.com" in panel and "── Codex ──" not in panel

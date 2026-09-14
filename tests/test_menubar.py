@@ -2,7 +2,7 @@
 
 These tests never import or run rumps/AppKit. They exercise the pure helpers
 (settings store, title/label formatting, usage/snapshot adapters, log parsing)
-only — the auto-switch engine itself lives in ``claude_swap.autoswitch`` and is
+only — the auto-switch engine itself lives in ``claude_swap.claude.autoswitch`` and is
 tested there.
 """
 
@@ -18,7 +18,7 @@ import pytest
 
 from claude_swap import menubar
 from claude_swap.exceptions import ClaudeSwitchError
-from claude_swap.switcher import USAGE_API_KEY
+from claude_swap.claude.switcher import USAGE_API_KEY
 
 
 # --- notification identity -----------------------------------------------------
@@ -554,7 +554,7 @@ def test_run_without_rumps_raises_clean_error(monkeypatch):
     it into the error type the CLI renders with the install hint.
     """
     monkeypatch.setitem(sys.modules, "rumps", None)
-    with pytest.raises(ClaudeSwitchError, match=r"claude-swap\[menubar\]"):
+    with pytest.raises(ClaudeSwitchError, match=r"ccswap\[menubar\]"):
         menubar.run(switcher=None)
 
 

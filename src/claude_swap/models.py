@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from claude_swap.usage_store import UsageEntry
 
 if TYPE_CHECKING:
-    from claude_swap.switcher import ClaudeAccountSwitcher
+    from claude_swap.claude.switcher import ClaudeAccountSwitcher
 
 
 #: Alias validation: letters/digits/-/_/., non-empty, not purely digits (so an
@@ -28,7 +28,7 @@ _ALIAS_RE = re.compile(r"^[a-z0-9_.-]+$")
 def normalize_alias(name: str) -> str:
     """Lowercase and validate a proposed alias; raise ValueError if invalid.
 
-    Shared by the CLI (``cswap alias``), ``cswap add --alias``, and import
+    Shared by the CLI (``ccswap alias``), ``ccswap add --alias``, and import
     validation so every path enforces identical rules.
     """
     normalized = name.strip().lower()
@@ -135,16 +135,24 @@ class AccountSnapshot:
     org_name: str
     org_uuid: str
     is_active: bool
-    kind: str  # "oauth" | "api_key"
+    kind: str  # "oauth" | "api_key" | "chatgpt"
     switchable: bool
     usage: UsageEntry
     alias: str = ""
     disabled: bool = False  # held out of auto-rotation (still a valid explicit target)
+    # Which CLI's login this is: "claude" (default) or "codex". Slot numbers
+    # are only unique within a provider, so UIs key rows on ``key``.
+    provider: str = "claude"
 
     @property
     def display_tag(self) -> str:
         """Org tag for display: the org name, or 'personal'."""
         return self.org_name if self.org_name else "personal"
+
+    @property
+    def key(self) -> str:
+        """Provider-qualified identity for UI rows (``"codex:2"``)."""
+        return f"{self.provider}:{self.number}"
 
 
 @dataclass(frozen=True)

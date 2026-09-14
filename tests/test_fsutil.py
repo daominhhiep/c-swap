@@ -242,7 +242,7 @@ class TestStrictRosterReadBranches:
     def _switcher(self, tmp_path):
         import logging
 
-        from claude_swap.switcher import ClaudeAccountSwitcher
+        from claude_swap.claude.switcher import ClaudeAccountSwitcher
 
         s = ClaudeAccountSwitcher.__new__(ClaudeAccountSwitcher)
         s._logger = logging.getLogger("test")

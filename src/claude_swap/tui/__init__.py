@@ -1,8 +1,8 @@
 """Textual-based interactive TUI for claude-swap.
 
-Entry point for ``cswap tui`` (and bare ``cswap`` in an interactive
+Entry point for ``ccswap tui`` (and bare ``ccswap`` in an interactive
 terminal). Heavy imports (textual, rich) stay inside :func:`run` so the
-plain CLI paths — ``cswap list``, cron's ``cswap auto --once`` — never pay
+plain CLI paths — ``ccswap list``, cron's ``ccswap auto --once`` — never pay
 for them.
 """
 
@@ -11,14 +11,20 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from claude_swap.switcher import ClaudeAccountSwitcher
+    from claude_swap.codex.switcher import CodexAccountSwitcher
+    from claude_swap.claude.switcher import ClaudeAccountSwitcher
 
 
-def run(switcher: "ClaudeAccountSwitcher", start: str = "dashboard") -> int:
+def run(
+    switcher: "ClaudeAccountSwitcher",
+    start: str = "dashboard",
+    codex_switcher: "CodexAccountSwitcher | None" = None,
+) -> int:
     """Run the TUI over an existing switcher. Returns the process exit code.
 
-    ``start="watch"`` (the ``cswap watch`` command) opens directly on the
-    live watch page, stacked over the dashboard.
+    ``start="watch"`` (the ``ccswap watch`` command) opens directly on the
+    live watch page, stacked over the dashboard. ``codex_switcher`` adds the
+    managed Codex CLI accounts as their own group in every account view.
     """
     from claude_swap.appearance import detect_terminal_background, drain_stdin
     from claude_swap.tui.app import CswapApp
@@ -32,7 +38,7 @@ def run(switcher: "ClaudeAccountSwitcher", start: str = "dashboard") -> int:
         detected = detect_terminal_background()
     except Exception:
         detected = None
-    app = CswapApp(switcher, start=start, detected=detected)
+    app = CswapApp(switcher, start=start, detected=detected, codex_switcher=codex_switcher)
     # Drain any late OSC reply immediately before Textual's driver starts,
     # so it isn't reissued as keystrokes once the app takes over the terminal.
     try:

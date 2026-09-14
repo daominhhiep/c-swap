@@ -1,6 +1,6 @@
-"""Run ``cswap menubar`` as a launchd LaunchAgent instead of a foreground process.
+"""Run ``ccswap menubar`` as a launchd LaunchAgent instead of a foreground process.
 
-``cswap menubar`` blocks the terminal that started it, so the status item dies
+``ccswap menubar`` blocks the terminal that started it, so the status item dies
 with that terminal — and never comes back after a logout or reboot. launchd is
 the native macOS answer: a per-user LaunchAgent starts the menu bar at login,
 restarts it if it crashes, and needs no ``.app`` bundle.
@@ -10,9 +10,9 @@ approach:
 
 *The plist pins the console script, not ``sys.executable``.* A LaunchAgent
 outlives upgrades, and the two paths age differently: ``uv tool upgrade`` (and
-``cswap upgrade``) rebuilds the tool's virtualenv — ``sys.executable`` points
+``ccswap upgrade``) rebuilds the tool's virtualenv — ``sys.executable`` points
 inside that virtualenv and can be replaced — while the console script keeps its
-path across upgrades. Pinning the script means an upgraded cswap needs a
+path across upgrades. Pinning the script means an upgraded ccswap needs a
 ``launchctl kickstart``, not a reinstalled service. ``sys.executable -m
 claude_swap`` stays as the fallback for installs that expose no console script.
 
@@ -36,7 +36,7 @@ from pathlib import Path
 
 from claude_swap.exceptions import ClaudeSwitchError
 
-LABEL = "com.cswap.menubar"
+LABEL = "com.ccswap.menubar"
 
 # launchd's default PATH is /usr/bin:/bin:/usr/sbin:/sbin, which covers
 # `security` (Keychain reads) but not a Homebrew or ~/.local/bin `claude`. The
@@ -71,7 +71,7 @@ def log_paths(label: str = LABEL, home: Path | None = None) -> tuple[Path, Path]
 
 
 def service_target(label: str = LABEL, uid: int | None = None) -> str:
-    """launchd service target, e.g. ``gui/501/com.cswap.menubar``."""
+    """launchd service target, e.g. ``gui/501/com.ccswap.menubar``."""
     return f"gui/{os.getuid() if uid is None else uid}/{label}"
 
 
@@ -88,7 +88,7 @@ def resolve_program() -> list[str]:
     interpreter that is executing right now.
 
     The path is made absolute but deliberately NOT resolved: a `uv tool
-    install` puts a symlink at ``~/.local/bin/cswap`` pointing into the tool's
+    install` puts a symlink at ``~/.local/bin/ccswap`` pointing into the tool's
     virtualenv, and resolving it would write that virtualenv-internal path
     into the plist — the very path this module avoids pinning, since a
     reinstall recreates the virtualenv while the symlink keeps its name.
@@ -96,10 +96,10 @@ def resolve_program() -> list[str]:
     candidate = sys.argv[0] if sys.argv and sys.argv[0] else None
     if candidate is not None:
         absolute = Path(os.path.abspath(candidate))
-        if absolute.name == "cswap" and absolute.is_file():
+        if absolute.name == "ccswap" and absolute.is_file():
             return [str(absolute)]
 
-    which = shutil.which("cswap")
+    which = shutil.which("ccswap")
     if which:
         return [str(Path(os.path.abspath(which)))]
 

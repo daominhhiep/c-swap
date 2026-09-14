@@ -31,7 +31,9 @@ from pathlib import Path
 
 import pytest
 
-from claude_swap import paths, session
+from claude_swap import paths
+
+from claude_swap.claude import session
 from claude_swap.models import Platform
 from tests import conftest
 
@@ -76,7 +78,7 @@ def test_control_b_and_c_real_store_write_is_refused(monkeypatch):
     """
     from claude_swap.exceptions import ClaudeSwitchError  # noqa: F401  (sanity import only)
 
-    marker_name = ".cswap-test-real-store-guard-probe-DELETE-ME"
+    marker_name = ".ccswap-test-real-store-guard-probe-DELETE-ME"
 
     monkeypatch.undo()  # expose the REAL, unpatched HOME from here on
 
@@ -533,7 +535,7 @@ def test_arbitrary_claude_config_dir_is_not_dropped_by_the_hint_prefilter(
     ran, so the write went through even though the root IS in
     ``_REAL_STORE_SPECS``.
     """
-    root_dir = Path(tempfile.mkdtemp(prefix="cswap-c2-noclaude-"))
+    root_dir = Path(tempfile.mkdtemp(prefix="ccswap-c2-noclaude-"))
     try:
         home = root_dir / "home"
         home.mkdir()
@@ -610,7 +612,7 @@ def test_i2_os_symlink_into_protected_root_is_refused(
 ):
     """I-2: ``os.symlink`` was not even in ``_WRITE_EVENTS``, so a symlink
     planted inside a protected root — aliasing an arbitrary target onto a
-    path a reader (Claude Code, cswap itself) would trust as real store
+    path a reader (Claude Code, ccswap itself) would trust as real store
     content — went through untouched."""
     stand_in_root = tmp_path / "claude-swap"
     stand_in_root.mkdir()
@@ -746,7 +748,7 @@ def test_mkdir_exist_ok_true_does_not_swallow_the_refusal(
 
     # Seed the dir OUTSIDE the guard's view (os.mkdir is unguarded here only
     # via direct filesystem bootstrap, matching how the real backup root
-    # exists on every developer machine before cswap ever runs in-process).
+    # exists on every developer machine before ccswap ever runs in-process).
     monkeypatch.setattr(conftest, "_REAL_STORE_SPECS", ())
     stand_in_root.mkdir(parents=True)
     monkeypatch.setattr(conftest, "_REAL_STORE_SPECS", ((stand_in_root, True),))
@@ -848,7 +850,7 @@ def test_c0_a_scratch_home_still_protects_the_os_account_home_store(monkeypatch,
     # fallback the third snapshot depends on. Restore the real
     # `Path.home` for this test -- $HOME stays scratch, which is the
     # condition under test.
-    from claude_swap import macos_keychain
+    from claude_swap.claude import macos_keychain
 
     monkeypatch.setattr(Path, "home", _REAL_PATH_HOME)
     assert (
@@ -910,3 +912,35 @@ def test_c0_a_scratch_home_still_protects_the_os_account_home_store(monkeypatch,
     assert scratch_root in roots, (
         "the scratch HOME's own root must stay protected too"
     )
+
+
+def test_frozen_specs_include_the_codex_home(monkeypatch, tmp_path):
+    """The Codex CLI's login file (``~/.codex/auth.json``, or
+    ``$CODEX_HOME/auth.json``) is a real credential store too: a test that
+    leaks the real ``$HOME`` must not be able to overwrite it."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr("pathlib.Path.home", lambda: home)
+    for var in ("CLAUDE_CONFIG_DIR", "CLAUDE_SECURESTORAGE_CONFIG_DIR",
+                "XDG_DATA_HOME", "CODEX_HOME"):
+        monkeypatch.delenv(var, raising=False)
+
+    specs = conftest._freeze_real_store_specs()
+    assert (home / ".codex", False) in specs
+
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "elsewhere"))
+    specs = conftest._freeze_real_store_specs()
+    assert (tmp_path / "elsewhere", False) in specs
+
+
+def test_write_into_codex_home_is_refused(tmp_path: Path, monkeypatch):
+    """A direct child of the Codex home (``auth.json``) is refused while the
+    guard is armed on it; the refusal happens before anything lands."""
+    codex_home = tmp_path / ".codex"
+    codex_home.mkdir()
+    monkeypatch.setattr(conftest, "_REAL_STORE_SPECS", ((codex_home, False),))
+
+    target = codex_home / "auth.json"
+    with pytest.raises(conftest.RealStoreWriteBlocked):
+        target.write_text("{}", encoding="utf-8")
+    assert not target.exists()

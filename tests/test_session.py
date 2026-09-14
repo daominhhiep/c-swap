@@ -1,4 +1,4 @@
-"""Tests for session mode (claude_swap.session + the switcher guards)."""
+"""Tests for session mode (claude_swap.claude.session + the switcher guards)."""
 
 from __future__ import annotations
 
@@ -13,10 +13,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from claude_swap import macos_keychain
-from claude_swap import oauth
-from claude_swap import session as session_mod
-from claude_swap.credentials import CLAUDE_CODE_MANAGED_KEYCHAIN_SERVICE
+from claude_swap.claude import macos_keychain
+from claude_swap.claude import oauth
+from claude_swap.claude import session as session_mod
+from claude_swap.claude.credentials import CLAUDE_CODE_MANAGED_KEYCHAIN_SERVICE
 from claude_swap.exceptions import (
     AccountNotFoundError,
     CredentialReadError,
@@ -26,7 +26,7 @@ from claude_swap.exceptions import (
 )
 from claude_swap.models import Platform
 from claude_swap.paths import get_global_config_path
-from claude_swap.session import (
+from claude_swap.claude.session import (
     MCP_DISPLACED_STASH,
     MCP_MIRROR_MARKER,
     SHARE_MANIFEST,
@@ -41,7 +41,7 @@ from claude_swap.session import (
     slugify_email,
     stale_marker_for,
 )
-from claude_swap.switcher import ClaudeAccountSwitcher
+from claude_swap.claude.switcher import ClaudeAccountSwitcher
 
 ACCOUNT_EMAIL = "account2@example.com"
 ACCOUNT_NUM = "2"
@@ -161,12 +161,12 @@ def refresh_rotates(monkeypatch):
     calls: list[str] = []
 
     def fake_gate(self, account_num: str, email: str, snapshot: str):
-        from claude_swap import oauth as oauth_mod
+        from claude_swap.claude import oauth as oauth_mod
         calls.append(snapshot)
         self._write_account_credentials(account_num, email, ROTATED_CREDS)
         return oauth_mod.RefreshOutcome(ROTATED_CREDS, None)
 
-    from claude_swap.switcher import ClaudeAccountSwitcher
+    from claude_swap.claude.switcher import ClaudeAccountSwitcher
     monkeypatch.setattr(
         ClaudeAccountSwitcher, "consume_backup_grant", fake_gate
     )
@@ -496,7 +496,7 @@ class TestBootstrap:
 
         `legacy_location=True` is the upgrade path: the marker moved to a
         SIBLING of the profile dir (a child could not be written by the fault
-        that motivates it), and a profile marked by an older cswap on this
+        that motivates it), and a profile marked by an older ccswap on this
         machine has a pending re-bootstrap that the move must not drop.
         """
         session_dir, _, _ = manager.setup_session("2", share=False)
@@ -540,7 +540,7 @@ class TestBootstrap:
         self, manager, seeded_switcher, auth_status_tracks_seed, refresh_rotates,
         legacy_location: bool,
     ):
-        """A second `cswap run` joining a live session must not invalidate
+        """A second `ccswap run` joining a live session must not invalidate
         under the running claude; the marker survives for later."""
         session_dir, _, _ = manager.setup_session("2", share=False)
         (session_dir / ".credentials.json").write_text("live lineage")
@@ -1227,7 +1227,7 @@ class TestMcpMirror:
         assert elsewhere.read_bytes() == before
 
     def test_held_lock_fails_open(self, mcp_setup, monkeypatch):
-        from claude_swap import claude_locks
+        from claude_swap.claude import claude_locks
 
         monkeypatch.setattr(claude_locks, "DEFAULT_TIMEOUT_S", 0.3)
         default_config, session_dir, mgr = mcp_setup
@@ -1387,7 +1387,7 @@ class TestRun:
             manager.run("2", [])
 
         # Warned, and the overrides are scrubbed from the launched env —
-        # `cswap run 2` means account 2, not whatever the API key resolves to.
+        # `ccswap run 2` means account 2, not whatever the API key resolves to.
         out = capsys.readouterr().out
         assert "Ignoring ANTHROPIC_API_KEY, ANTHROPIC_AUTH_TOKEN" in out
         assert "ANTHROPIC_API_KEY" not in exc.value.env
@@ -1612,7 +1612,7 @@ class TestGuards:
     ):
         """Re-login + --add-account (or any backup cred write) must force the
         non-live session profile to re-bootstrap — otherwise the documented
-        recovery path leaves `cswap run` on stale credentials that still pass
+        recovery path leaves `ccswap run` on stale credentials that still pass
         the local reuse check."""
         session_dir = session_dir_for(
             seeded_switcher.backup_dir, ACCOUNT_NUM, ACCOUNT_EMAIL
@@ -1797,7 +1797,7 @@ class TestGuards:
     def test_list_skips_refresh_for_live_session_accounts(
         self, seeded_switcher, monkeypatch
     ):
-        """cswap --list must not proactively refresh an account that is live in
+        """ccswap --list must not proactively refresh an account that is live in
         a session — rotating the backup copy's token could invalidate the
         session's copy."""
         session_dir = session_dir_for(
@@ -1816,7 +1816,7 @@ class TestGuards:
             return oauth.UsageOutcome(None)
 
         monkeypatch.setattr(
-            "claude_swap.oauth.try_fetch_usage_for_account", fake_fetch
+            "claude_swap.claude.oauth.try_fetch_usage_for_account", fake_fetch
         )
         seeded_switcher.list_accounts()
 
@@ -2376,7 +2376,7 @@ class TestCaptureCredentials:
 
         def locked(service: str, account: str) -> str | None:
             if not service.startswith("Claude Code-credentials-"):
-                return fake_store_read(service, account)  # cswap's own backup store
+                return fake_store_read(service, account)  # ccswap's own backup store
             calls.append(service)
             raise error
 
@@ -2399,7 +2399,7 @@ class TestCaptureCredentials:
 
         def flaky(service: str, account: str) -> str | None:
             if not service.startswith("Claude Code-credentials-"):
-                return fake_store_read(service, account)  # cswap's own backup store
+                return fake_store_read(service, account)  # ccswap's own backup store
             outcome = next(outcomes)
             if outcome == "busy":
                 raise macos_keychain.KeychainError("busy")
@@ -2550,8 +2550,8 @@ class TestBootstrapRefreshRoutesThroughGate:
     the switcher's consume gate, not a direct POST of its own read."""
 
     def test_bootstrap_uses_gate(self, temp_home, monkeypatch):
-        from claude_swap import oauth as oauth_mod
-        from claude_swap.switcher import ClaudeAccountSwitcher
+        from claude_swap.claude import oauth as oauth_mod
+        from claude_swap.claude.switcher import ClaudeAccountSwitcher
         s = ClaudeAccountSwitcher()
         s._setup_directories()
         s._init_sequence_file()
@@ -2592,12 +2592,12 @@ class TestBootstrapRefreshRoutesThroughGate:
         # The bypass seam: session.py no longer imports any direct refresh
         # helper, so a regression would have to call oauth's POST directly.
         monkeypatch.setattr(
-            "claude_swap.oauth.try_refresh_oauth_credentials", direct_post
+            "claude_swap.claude.oauth.try_refresh_oauth_credentials", direct_post
         )
         monkeypatch.setattr(
-            "claude_swap.oauth.refresh_oauth_credentials", direct_post
+            "claude_swap.claude.oauth.refresh_oauth_credentials", direct_post
         )
-        from claude_swap.session import SessionManager
+        from claude_swap.claude.session import SessionManager
         mgr = SessionManager(s)
         # setup_session is the seam: it must call the gate BEFORE the
         # bootstrap lock (the gate takes the same non-reentrant FileLock).
@@ -2615,7 +2615,7 @@ class TestAConsumedGrantIsNotSpentOnAProfileThatWonBootstrap:
     """A one-time grant consumed for THIS pass must reach the profile it was for.
 
     The consume runs before the bootstrap lock (it POSTs, and must never hold
-    one). The under-lock re-check then returns early when another `cswap run`
+    one). The under-lock re-check then returns early when another `ccswap run`
     bootstrapped while we waited — at which point this pass has already burned
     a one-time refresh token whose successor nobody uses for the session it was
     fetched for. The successor is persisted to the BACKUP, so nothing is lost;

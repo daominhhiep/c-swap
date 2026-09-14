@@ -54,7 +54,7 @@ outlasts an hour *past* that margin.
 
 Plans computed here are persisted per account in the usage store
 (``nextPollAt``/``pollIntervalS``) by whichever collector fetched, so every
-surface — ``cswap list``, the TUI, the menu bar, the auto engine — inherits
+surface — ``ccswap list``, the TUI, the menu bar, the auto engine — inherits
 the same cadence no matter how often it repaints.
 
 If a future probe revises the measured shape, adjust the constants in this
@@ -67,7 +67,7 @@ import random
 from collections.abc import Callable
 from datetime import datetime
 
-from claude_swap import oauth
+from claude_swap.claude import oauth
 
 # Freshness floor shared by every collector: an entry younger than this is
 # served from the store without any fetch, so the maximum sustained rate on
