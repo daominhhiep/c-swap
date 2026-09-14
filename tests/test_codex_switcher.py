@@ -210,7 +210,7 @@ class TestSwitch:
 
     def test_missing_slot_file(self, two_accounts):
         two_accounts._store.delete_slot("1")
-        with pytest.raises(CredentialReadError, match="--slot 1"):
+        with pytest.raises(CredentialReadError, match="ccswap codex login"):
             two_accounts.switch_to("1")
 
     def test_unknown_target(self, two_accounts):
@@ -237,6 +237,92 @@ class TestSwitch:
     def test_nothing_managed(self, switcher, codex_home):
         with pytest.raises(ConfigError, match="ccswap codex add"):
             switcher.switch_to("1")
+
+
+class TestLogin:
+    """`ccswap codex login`: stash the current login so `codex login` cannot
+    revoke it, run the login, save the result."""
+
+    @pytest.fixture
+    def fake_codex(self, temp_home):
+        """Patch `codex` on PATH and `subprocess.call`; the fake login writes
+        whatever `next_auth` holds (or nothing) and returns `rc`."""
+        state = {"next_auth": None, "rc": 0, "calls": [], "live_at_call": "unset"}
+
+        def call(argv, **_kw):
+            state["calls"].append(argv)
+            state["live_at_call"] = (temp_home / ".codex" / "auth.json").exists()
+            if state["next_auth"] is not None:
+                write_codex_auth(temp_home, state["next_auth"])
+            return state["rc"]
+
+        with patch("claude_swap.codex.switcher.shutil.which", return_value="/usr/bin/codex"), \
+             patch("claude_swap.codex.switcher.subprocess.call", side_effect=call):
+            yield state
+
+    def test_saves_current_login_then_adds_the_new_one(self, switcher, codex_home, fake_codex, capsys):
+        fake_codex["next_auth"] = make_codex_auth("b@x.y", "acct_b", "team")
+        switcher.login(["--device-auth"])
+        out = capsys.readouterr().out
+        data = _roster(switcher)
+        assert data["accounts"]["1"]["email"] == "me@example.com"
+        assert data["accounts"]["2"]["email"] == "b@x.y"
+        assert data["activeAccountNumber"] == 2
+        assert switcher._store.read_slot("1")["tokens"]["refresh_token"] == "rt-1"
+        assert fake_codex["calls"] == [["/usr/bin/codex", "login", "--device-auth"]]
+        assert fake_codex["live_at_call"] is False  # nothing left for codex to revoke
+        assert "Saved current login as Codex account 1" in out
+        assert "Added Codex account 2" in out
+
+    def test_managed_login_is_synced_back_not_duplicated(self, switcher, codex_home, fake_codex):
+        switcher.add_account()
+        rotated = make_codex_auth(refresh_token="rt-rotated")
+        write_codex_auth(codex_home.parent, rotated)
+        fake_codex["next_auth"] = make_codex_auth("b@x.y", "acct_b")
+        switcher.login()
+        data = _roster(switcher)
+        assert sorted(data["accounts"]) == ["1", "2"]
+        assert switcher._store.read_slot("1")["tokens"]["refresh_token"] == "rt-rotated"
+
+    def test_failed_login_restores_previous_file(self, switcher, codex_home, fake_codex, capsys):
+        fake_codex["rc"] = 1
+        with pytest.raises(CodexAuthError, match="status 1"):
+            switcher.login()
+        assert _live(codex_home.parent)["tokens"]["refresh_token"] == "rt-1"
+        data = _roster(switcher)
+        assert data["accounts"]["1"]["email"] == "me@example.com"
+        assert data["activeAccountNumber"] == 1
+        assert "restored" in capsys.readouterr().out
+
+    def test_login_that_writes_nothing_restores_previous_file(self, switcher, codex_home, fake_codex):
+        with pytest.raises(CodexAuthError, match="without a ChatGPT login"):
+            switcher.login()
+        assert switcher.current_account_number() == "1"
+
+    def test_ctrl_c_restores_and_reraises(self, switcher, codex_home, fake_codex):
+        with patch("claude_swap.codex.switcher.subprocess.call", side_effect=KeyboardInterrupt):
+            with pytest.raises(KeyboardInterrupt):
+                switcher.login()
+        assert switcher.current_account_number() == "1"
+
+    def test_no_current_login_just_runs_codex_login(self, switcher, temp_home, fake_codex):
+        fake_codex["next_auth"] = make_codex_auth("b@x.y", "acct_b")
+        switcher.login()
+        assert _roster(switcher)["accounts"]["1"]["email"] == "b@x.y"
+
+    def test_api_key_login_is_left_alone(self, switcher, temp_home, fake_codex, capsys):
+        write_codex_auth(temp_home, make_codex_auth(mode="apikey"))
+        fake_codex["next_auth"] = make_codex_auth("b@x.y", "acct_b")
+        switcher.login()
+        assert fake_codex["live_at_call"] is True
+        assert "API key" in capsys.readouterr().out
+        assert _roster(switcher)["accounts"]["1"]["email"] == "b@x.y"
+
+    def test_codex_missing_from_path(self, switcher, codex_home):
+        with patch("claude_swap.codex.switcher.shutil.which", return_value=None):
+            with pytest.raises(CodexAuthError, match="not found"):
+                switcher.login()
+        assert _live(codex_home.parent)["tokens"]["refresh_token"] == "rt-1"  # untouched
 
 
 class TestRemoveAndAlias:
@@ -479,4 +565,4 @@ class TestSnapshotAndPayloads:
                 store.clock = (lambda i=i: 1e9 + i * 86400)
                 two_accounts.list_accounts()
         out = capsys.readouterr().out
-        assert "codex login" in out and "ccswap codex add" in out
+        assert "ccswap codex login" in out
