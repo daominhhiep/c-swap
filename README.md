@@ -175,12 +175,12 @@ Run `ccswap` on its own (or `ccswap tui`) for the full-screen dashboard: live us
 `ccswap` can also keep several **Codex CLI** (ChatGPT) logins and swap between them. Codex accounts live in their own numbered list — Codex slot 1 and Claude slot 1 are unrelated.
 
 ```bash
-codex login                      # log in to the Codex CLI as usual
+codex login                      # log in to the Codex CLI as usual (first account only)
 ccswap add                       # pick "[2] OpenAI Codex" from the menu
 ccswap codex add                 # ...or skip the menu (also: ccswap add --provider codex)
 
-codex login                      # log in as another ChatGPT account
-ccswap codex add                 # save it as Codex account 2
+ccswap codex login               # sign in as another ChatGPT account -> Codex account 2
+                                 # (options such as --device-auth are passed to `codex login`)
 
 ccswap codex list                # accounts with 5h / weekly usage
 ccswap codex switch              # rotate to the next account
@@ -194,6 +194,7 @@ The dashboard (`ccswap`) lists Codex accounts under a **Codex** heading next to 
 
 Notes:
 
+- **Add further accounts with `ccswap codex login`, not `codex login` / `codex logout`.** The Codex CLI revokes the login it finds before starting a new one, which would kill the saved copy too. `ccswap codex login` saves the current login as an account, moves it out of the way, runs `codex login`, and saves the new account; if the login is cancelled the previous one is put back. If an account has already been revoked, `list` shows *re-login needed* — run `ccswap codex login` and sign in as that account again.
 - Only ChatGPT logins (`codex login`) are supported. An API-key login is left alone, and a Codex CLI configured with `cli_auth_credentials_store = "keyring"` is not supported — use the default file store.
 - Switching copies the saved login over `~/.codex/auth.json` (or `$CODEX_HOME/auth.json`). Restart any running `codex` session afterwards so it picks up the new login.
 - Usage percentages come from an unofficial ChatGPT usage endpoint (the one the Codex CLI's `/status` reads from); if it changes, `list` keeps working and only the usage lines go blank.
@@ -230,7 +231,7 @@ ccswap move 2 1                  # Assign an account to a slot (relocates to an 
 ccswap unclaimed                 # List stashed credential entries (slot + why they were stashed)
 ccswap unclaimed --purge ID      # Drop one (deletes its bytes; recover with /login + `ccswap add`)
 ccswap tui                       # Interactive dashboard (also: bare `ccswap`)
-ccswap codex <command>           # Same add/list/switch/status/remove/alias for Codex CLI logins
+ccswap codex <command>           # Same login/add/list/switch/status/remove/alias for Codex CLI logins
 ccswap watch                     # Dashboard, opened on the live watch page
 ccswap upgrade                   # Upgrade claude-swap to the latest version
 ccswap purge                     # Remove all claude-swap data

@@ -1841,6 +1841,30 @@ class TestCodexProvider:
         assert exc.value.code == 2
         codex_cls.assert_not_called()
 
+    def test_codex_login_passes_args_through(self, temp_home):
+        codex_cls = MagicMock()
+        with patch("claude_swap.cli.CodexAccountSwitcher", codex_cls), \
+             patch.object(sys, "argv", ["ccswap", "codex", "login", "--device-auth"]):
+            cli.main()
+        codex_cls.return_value.login.assert_called_once_with(["--device-auth"])
+
+    def test_codex_login_error_exits_1(self, temp_home, capsys):
+        from claude_swap.codex.auth import CodexAuthError
+
+        codex_cls = MagicMock()
+        codex_cls.return_value.login.side_effect = CodexAuthError("boom")
+        with patch("claude_swap.cli.CodexAccountSwitcher", codex_cls), \
+             patch.object(sys, "argv", ["ccswap", "codex", "login"]):
+            with pytest.raises(SystemExit) as exc:
+                cli.main()
+        assert exc.value.code == 1
+        assert "boom" in capsys.readouterr().err
+
+    def test_codex_login_help(self, temp_home, capsys):
+        with patch.object(sys, "argv", ["ccswap", "codex", "login", "--help"]):
+            cli.main()
+        assert "codex login" in capsys.readouterr().out
+
     def test_bare_codex_shows_help(self, temp_home, capsys):
         with pytest.raises(SystemExit) as exc:
             self._main(["codex"], MagicMock())
